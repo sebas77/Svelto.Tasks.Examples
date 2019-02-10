@@ -6,7 +6,7 @@ using UnityEngine;
 namespace Test.Editor.UnityVSTaskRunner
 {
     /// <summary>
-    /// unluckily Local Functions do not perform well therefore I may drop this pattern
+    /// unluckily the LocalFunctionEnumerator do not perform well therefore I may drop this pattern
     /// </summary>
     public class DoSomethingHeavyWithTaskRunnerLocal : MonoBehaviour
     {
@@ -29,7 +29,7 @@ namespace Test.Editor.UnityVSTaskRunner
                 return true;
             }
             
-            new LocalFunctionEnumerator(update).RunOn(_runner);
+            new LocalFunctionEnumerator(() => update()).RunOn(_runner);
         }
         
       

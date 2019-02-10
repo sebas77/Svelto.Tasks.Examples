@@ -4,15 +4,9 @@ using Svelto.Utilities;
 
 namespace Svelto.Tasks.Enumerators
 {
-    /// <summary>
-    /// /// Yield a function that control the flow execution through the return value.
-    /// </summary>
-    /// <typeparam name="TVal">
-    /// facilitate the use of counters that can be passed by reference to the callback function
-    /// </typeparam>
-    public class SmartFunctionEnumerator<TVal>: IEnumerator<TaskContract>
+    public struct FastSmartFunctionEnumerator<TVal>: IEnumerator<TaskContract>
     {
-        public SmartFunctionEnumerator(FuncRef<TVal, bool> func)
+        public FastSmartFunctionEnumerator(FuncRef<TVal, bool> func):this()
         {
             _func  = func;
             _value = default(TVal);
@@ -26,9 +20,14 @@ namespace Svelto.Tasks.Enumerators
         public void Reset()
         {}
 
-        public TaskContract Current
+        TaskContract IEnumerator<TaskContract>.Current
         {
             get { return Yield.It; }
+        }
+
+        public TVal Current
+        {
+            get { return _value; }
         }
 
         object IEnumerator.Current

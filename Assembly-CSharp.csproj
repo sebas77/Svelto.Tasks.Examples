@@ -66,6 +66,7 @@
     <Compile Include="Assets\Testbeds\TimeSlice\TimeSlice.cs" />
     <Compile Include="Assets\Testbeds\UnityVSTaskRunner\DoSomethingHeavyWithTaskRunner.cs" />
     <Compile Include="Assets\Testbeds\UnityVSTaskRunner\DoSomethingHeavyWithTaskRunnerEx.cs" />
+    <Compile Include="Assets\Testbeds\UnityVSTaskRunner\DoSomethingHeavyWithTaskRunnerLocalcs.cs" />
     <Compile Include="Assets\Testbeds\UnityVSTaskRunner\DoSomethingHeavyWithUnity.cs" />
     <Compile Include="Assets\Testbeds\UnityVSTaskRunner\SpawnObjects.cs" />
     <Reference Include="Unity.RenderPipelines.Core.Editor">

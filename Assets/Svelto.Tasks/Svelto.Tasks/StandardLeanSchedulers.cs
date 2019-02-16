@@ -1,41 +1,33 @@
 using System.Collections.Generic;
-using Svelto.Tasks.Unity;
-
-#if UNITY_5 || UNITY_5_3_OR_NEWER && later
-using Svelto.Tasks.Unity;
-#endif
 
 namespace Svelto.Tasks.Lean
 {
     public static class StandardSchedulers
     {
-        static MultiThreadRunner<LeanSveltoTask<IEnumerator<TaskContract>>>    _multiThreadScheduler;
-
-        static CoroutineMonoRunner<LeanSveltoTask<IEnumerator<TaskContract>>>  _coroutineScheduler;
-        static UpdateMonoRunner<LeanSveltoTask<IEnumerator<TaskContract>>>     _updateScheduler;
-#if UNITY_5 || UNITY_5_3_OR_NEWER && later    
+        static MultiThreadRunner<IEnumerator<TaskContract>>    _multiThreadScheduler;
+#if UNITY_5 || UNITY_5_3_OR_NEWER    
+        static Unity.CoroutineMonoRunner<IEnumerator<TaskContract>>  _coroutineScheduler;
+        static Unity.UpdateMonoRunner<IEnumerator<TaskContract>>     _updateScheduler;
+#if later    
         static PhysicMonoRunner<TaskRoutine<IEnumerator<TaskContract>>>      _physicScheduler;
-        static LateMonoRunner<TaskRoutine<IEnumerator<TaskContract>>>        _lateScheduler;
-        
+        static LateMonoRunner<TaskRoutine<IEnumerator<TaskContract>>>        _lateScheduler;       
         static EarlyUpdateMonoRunner<TaskRoutine<IEnumerator<TaskContract>>> _earlyScheduler;
 #endif
-        public static MultiThreadRunner<LeanSveltoTask<IEnumerator<TaskContract>>> multiThreadScheduler =>
-            _multiThreadScheduler ?? (_multiThreadScheduler =
-                                          new MultiThreadRunner<LeanSveltoTask<IEnumerator<TaskContract>>
+#endif
+        public static MultiThreadRunner<IEnumerator<TaskContract>> multiThreadScheduler =>
+            _multiThreadScheduler ?? (_multiThreadScheduler = new MultiThreadRunner<IEnumerator<TaskContract>
                                           >("StandardMultiThreadRunner", false));
 
+#if UNITY_5 || UNITY_5_3_OR_NEWER        
         internal static IRunner standardScheduler => coroutineScheduler;
 
-        public static CoroutineMonoRunner<LeanSveltoTask<IEnumerator<TaskContract>>> coroutineScheduler =>
-            _coroutineScheduler ?? (_coroutineScheduler =
-                                        new CoroutineMonoRunner<LeanSveltoTask<IEnumerator<TaskContract>>
-                                        >("StandardCoroutineRunner"));
+        public static Unity.CoroutineMonoRunner<IEnumerator<TaskContract>> coroutineScheduler =>
+            _coroutineScheduler ?? (_coroutineScheduler = new Unity.CoroutineMonoRunner<IEnumerator<TaskContract>>("StandardCoroutineRunner"));
 
-        public static UpdateMonoRunner<LeanSveltoTask<IEnumerator<TaskContract>>> updateScheduler =>
+        public static Unity.UpdateMonoRunner<IEnumerator<TaskContract>> updateScheduler =>
             _updateScheduler ?? (_updateScheduler =
-                                     new UpdateMonoRunner<LeanSveltoTask<IEnumerator<TaskContract>>
-                                     >("StandardUpdateRunner"));
-#if UNITY_5 || UNITY_5_3_OR_NEWER && later        
+                                     new Unity.UpdateMonoRunner<IEnumerator<TaskContract>>("StandardUpdateRunner"));
+#if later        
         public static PhysicMonoRunner<TaskRoutine<IEnumerator<TaskContract>>> physicScheduler { get { if (_physicScheduler == null) _physicScheduler = new PhysicMonoRunner<TaskRoutine<IEnumerator<TaskContract>>>("StandardPhysicRunner");
             return _physicScheduler;
         } }
@@ -52,6 +44,7 @@ namespace Svelto.Tasks.Lean
                 return _multiThreadScheduler;
             } 
         }
+#endif
 #endif
 
         //physicScheduler -> earlyScheduler -> updateScheduler -> coroutineScheduler -> lateScheduler

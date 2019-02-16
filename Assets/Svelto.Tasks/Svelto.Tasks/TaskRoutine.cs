@@ -5,6 +5,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Svelto.Tasks.Enumerators;
 
 namespace Svelto.Tasks.Internal
 {
@@ -19,7 +20,7 @@ namespace Svelto.Tasks.Internal
         {
             _sveltoTask = new SveltoTask();
             _runner     = runner;
-            _continuationEnumerator = ContinuationWrapperPool.RetrieveFromPool();
+            _continuationEnumerator = ContinuationPool.RetrieveFromPool();
         }
 
         public bool MoveNext()
@@ -36,7 +37,7 @@ namespace Svelto.Tasks.Internal
 
                     _sveltoTask._stackingTask = new SveltoTaskWrapper<TTask, IInternalRunner<LeanSveltoTask<TTask>>>(ref _pendingTask);
                     _sveltoTask._threadSafeSveltoTaskStates = new SveltoTaskState();
-                    _continuationEnumerator.Reset();
+                    _continuationEnumerator.InternalReset();
                 }
                 else
                     _continuationEnumerator.Completed();
@@ -110,7 +111,7 @@ namespace Svelto.Tasks.Internal
                 _pendingTask                 = newTask;
                 _previousContinuationEnumerator = continuationWrapper;
 
-                continuationWrapper = _continuationEnumerator = new ContinuationEnumerator();
+                continuationWrapper = _continuationEnumerator = ContinuationPool.RetrieveFromPool();
             }
             else
             {

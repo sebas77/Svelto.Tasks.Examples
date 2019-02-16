@@ -11,7 +11,7 @@ namespace Svelto.Tasks
         /// <returns>
         /// New reusable TaskRoutine
         /// </returns>
-        public static TaskRoutine<T> AllocateNewTaskRoutine<T, W>(W runner) where T: IEnumerator<TaskContract> where W:IInternalRunner<TaskRoutine<T>>
+        public static TaskRoutine<T> AllocateNewTaskRoutine<T, W>(W runner) where T: IEnumerator<TaskContract> where W:class, IInternalRunner<TaskRoutine<T>>
         {
             return new TaskRoutine<T>(runner);
         }
@@ -19,7 +19,6 @@ namespace Svelto.Tasks
         public static void StopAndCleanupAllDefaultSchedulers()
         {
             Lean.StandardSchedulers.KillSchedulers();
-            ExtraLean.StandardSchedulers.KillSchedulers();
         }
 
         static TaskRunner()
@@ -38,13 +37,11 @@ namespace Svelto.Tasks
         public static void Pause()
         {
             Lean.StandardSchedulers.Pause();
-            ExtraLean.StandardSchedulers.Pause();
         }
 
         public static void Resume()
         {
             Lean.StandardSchedulers.Resume();
-            ExtraLean.StandardSchedulers.Resume();
         }
     }
 }

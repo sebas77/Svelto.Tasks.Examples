@@ -5,20 +5,9 @@ using Svelto.Common;
 using Svelto.Tasks.Internal;
 using Svelto.Tasks.Unity.Internal;
 
-namespace Svelto.Tasks.Unity
+namespace Svelto.Tasks
 {
-    namespace ExtraLean
-    {
-        public class UpdateMonoRunner<T> : Svelto.Tasks.Unity.UpdateMonoRunner<ExtraLeanSveltoTask<T>> where
-            T : IEnumerator
-        {
-            public UpdateMonoRunner(string name) : base(name)
-            {
-            }
-        }
-    }
-
-    namespace Lean
+    namespace Lean.Unity
     {
         public class UpdateMonoRunner<T> : Svelto.Tasks.Unity.UpdateMonoRunner<LeanSveltoTask<T>> where T : IEnumerator<TaskContract>
         {
@@ -28,24 +17,28 @@ namespace Svelto.Tasks.Unity
         }
     }
 
-    public class UpdateMonoRunner<T> : UpdateMonoRunner<T, StandardRunningTasksInfo> where T : ISveltoTask
+    namespace Unity
     {
-        public UpdateMonoRunner(string name) : base(name, new StandardRunningTasksInfo())
-        {}
-    }
-    
-    public class UpdateMonoRunner<T, TFlowModifier> : BaseRunner<T> where T: ISveltoTask 
-                                                                    where TFlowModifier:IRunningTasksInfo
-    {
-        public UpdateMonoRunner(string name, TFlowModifier modifier):base(name)
+        public class UpdateMonoRunner<T> : UpdateMonoRunner<T, StandardRunningTasksInfo> where T : ISveltoTask
         {
-            modifier.runnerName = name;
+            public UpdateMonoRunner(string name) : base(name, new StandardRunningTasksInfo())
+            {
+            }
+        }
 
-            _processEnumerator =
-                new CoroutineRunner<T>.Process<TFlowModifier, PlatformProfiler>
-                (_newTaskRoutines, _coroutines, _flushingOperation, modifier);
-            
-            UnityCoroutineRunner.StartUpdateCoroutine(_processEnumerator);
+        public class UpdateMonoRunner<T, TFlowModifier> : BaseRunner<T> where T : ISveltoTask
+                                                                        where TFlowModifier : IRunningTasksInfo
+        {
+            public UpdateMonoRunner(string name, TFlowModifier modifier) : base(name)
+            {
+                modifier.runnerName = name;
+
+                _processEnumerator =
+                    new CoroutineRunner<T>.Process<TFlowModifier, PlatformProfiler>
+                        (_newTaskRoutines, _coroutines, _flushingOperation, modifier);
+
+                UnityCoroutineRunner.StartUpdateCoroutine(_processEnumerator);
+            }
         }
     }
 }

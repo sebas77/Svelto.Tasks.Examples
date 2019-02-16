@@ -2,28 +2,9 @@ using System;
 using Svelto.Tasks;
 using System.Collections;
 using System.Collections.Generic;
+using Svelto.Tasks.Enumerators;
 using Svelto.Tasks.Internal;
-using Svelto.Tasks.Lean;
 using Svelto.Utilities;
-
-namespace Svelto.Tasks.ExtraLean
-{
-    public static class TaskRunnerExtensionsExtraLean
-    {
-        public static void Run(this IEnumerator enumerator)
-        {
-            new ExtraLeanSveltoTask<IEnumerator>()
-               .Run((IInternalRunner<ExtraLeanSveltoTask<IEnumerator>>) StandardSchedulers.standardScheduler,
-                      ref enumerator, true);
-        }
-        
-        public static void RunOn<TTask, TRunner>(this TTask enumerator, TRunner runner)
-            where TTask : IEnumerator where TRunner : class, IInternalRunner<ExtraLeanSveltoTask<TTask>>
-        {
-            new ExtraLeanSveltoTask<TTask>().Run(runner, ref enumerator, false);
-        }
-    }
-}
 
 namespace Svelto.Tasks.Lean
 {
@@ -46,13 +27,37 @@ namespace Svelto.Tasks.Lean
 
 public static class TaskRunnerExtensions
 {
-    public static TaskContract Continue(this IEnumerator<TaskContract> enumerator)
+    public static TaskContract Continue<T>(this T enumerator) where T:IEnumerator<TaskContract>
     {
-        return new TaskContract(enumerator);
+        while (enumerator.MoveNext() == true)
+        {
+            var Current = enumerator.Current;
+                 
+            if (Current.yieldIt == true)  
+                return Current;
+    
+            if (Current.breakit == Break.It || Current.breakit == Break.AndStop)
+                return Current;
+            
+            if (Current.hasValue)
+                return Current;
+        }
+            
+        return enumerator.Current;
+    }
+    
+    public static TaskContract SimpleContinue<T>(this T enumerator) where T:IEnumerator
+    {
+        while (enumerator.MoveNext() == true)
+        {
+            return new TaskContract(Yield.It);
+        }
+            
+        return new TaskContract();
     }
 
     public static TaskRoutine<TTask> ToTaskRoutine<TTask, TRunner>(this TTask enumerator, TRunner runner)
-        where TTask : IEnumerator<TaskContract> where TRunner : IInternalRunner<TaskRoutine<TTask>>
+        where TTask : IEnumerator<TaskContract> where TRunner : class, IInternalRunner<TaskRoutine<TTask>>
     {
         var taskroutine = TaskRunner.AllocateNewTaskRoutine<TTask, TRunner>(runner);
         taskroutine.SetEnumerator(enumerator);

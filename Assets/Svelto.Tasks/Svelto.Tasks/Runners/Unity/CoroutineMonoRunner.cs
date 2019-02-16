@@ -5,7 +5,7 @@ using Svelto.Common;
 using Svelto.Tasks.Internal;
 using Svelto.Tasks.Unity.Internal;
 
-namespace Svelto.Tasks
+namespace Svelto.Tasks.Unity
 {
     /// <summary>
     /// while you can instantiate a BaseRunner, you should use the standard one whenever possible. Instantiating
@@ -15,43 +15,45 @@ namespace Svelto.Tasks
     /// You should use YieldInstructions only when extremely necessary as often an Svelto.Tasks IEnumerator
     /// replacement is available.
     /// </summary>
-    namespace Lean.Unity
+    public class ExtraLeanCoroutineMonoRunner<T> : UpdateMonoRunner<ExtraLeanSveltoTask<T>> where 
+        T:IEnumerator
     {
-        public class CoroutineMonoRunner<T> : Svelto.Tasks.Unity.UpdateMonoRunner<LeanSveltoTask<T>> where T : IEnumerator<TaskContract>
+        public ExtraLeanCoroutineMonoRunner(string name) : base(name)
         {
-            public CoroutineMonoRunner(string name) : base(name)
-            {
-            }
         }
     }
-
-    namespace Unity
+    
+    public class LeanCoroutineMonoRunner<T> : UpdateMonoRunner<LeanSveltoTask<T>> where T:IEnumerator<TaskContract>
     {
-        public class CoroutineMonoRunner<T> : CoroutineMonoRunner<T, StandardRunningTasksInfo> where T : ISveltoTask
+        public LeanCoroutineMonoRunner(string name) : base(name)
         {
-            public CoroutineMonoRunner(string name) : base(name, new StandardRunningTasksInfo())
-            {
-            }
+        }
+    }
+    
+    public class CoroutineMonoRunner<T> : CoroutineMonoRunner<T, StandardRunningTasksInfo> where T : ISveltoTask
+    {
+        public CoroutineMonoRunner(string name) : base(name, new StandardRunningTasksInfo())
+        {
+        }
+    }
+    
+    public class CoroutineMonoRunner<T, TFlowModifier> : BaseRunner<T> where T: ISveltoTask
+                                                                       where TFlowModifier:IRunningTasksInfo
+    {
+        public CoroutineMonoRunner(string name, TFlowModifier modifier):base(name)
+        {
+            modifier.runnerName = name;
+            
+            _processEnumerator =
+                new CoroutineRunner<T>.Process<TFlowModifier, PlatformProfiler>
+                (_newTaskRoutines, _coroutines, _flushingOperation, modifier);
+            
+            UnityCoroutineRunner.StartCoroutine(_processEnumerator);
         }
 
-        public class CoroutineMonoRunner<T, TFlowModifier> : BaseRunner<T> where T : ISveltoTask
-                                                                           where TFlowModifier : IRunningTasksInfo
+        public void StartYieldInstruction(IEnumerator instruction)
         {
-            public CoroutineMonoRunner(string name, TFlowModifier modifier) : base(name)
-            {
-                modifier.runnerName = name;
-
-                _processEnumerator =
-                    new CoroutineRunner<T>.Process<TFlowModifier, PlatformProfiler>
-                        (_newTaskRoutines, _coroutines, _flushingOperation, modifier);
-
-                UnityCoroutineRunner.StartCoroutine(_processEnumerator);
-            }
-
-            public void StartYieldInstruction(IEnumerator instruction)
-            {
-                UnityCoroutineRunner.StartYieldCoroutine(instruction);
-            }
+            UnityCoroutineRunner.StartYieldCoroutine(instruction);
         }
     }
 }

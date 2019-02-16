@@ -19,10 +19,7 @@ namespace Assets
         {
             while (true) 
             {
-                var transformPosition = _transform.position;
-                transformPosition.x += _direction.x;
-                transformPosition.y += _direction.y;
-                _transform.position =  transformPosition;
+                _transform.Translate(_direction);
 
                 yield return null;
             }

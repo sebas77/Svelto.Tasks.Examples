@@ -5,9 +5,20 @@ using Svelto.Common;
 using Svelto.Tasks.Internal;
 using Svelto.Tasks.Unity.Internal;
 
-namespace Svelto.Tasks
+namespace Svelto.Tasks.Unity
 {
-    namespace Lean.Unity
+    namespace ExtraLean
+    {
+        public class UpdateMonoRunner<T> : Svelto.Tasks.Unity.UpdateMonoRunner<ExtraLeanSveltoTask<T>> where
+            T : IEnumerator
+        {
+            public UpdateMonoRunner(string name) : base(name)
+            {
+            }
+        }
+    }
+
+    namespace Lean
     {
         public class UpdateMonoRunner<T> : Svelto.Tasks.Unity.UpdateMonoRunner<LeanSveltoTask<T>> where T : IEnumerator<TaskContract>
         {
@@ -17,28 +28,24 @@ namespace Svelto.Tasks
         }
     }
 
-    namespace Unity
+    public class UpdateMonoRunner<T> : UpdateMonoRunner<T, StandardRunningTasksInfo> where T : ISveltoTask
     {
-        public class UpdateMonoRunner<T> : UpdateMonoRunner<T, StandardRunningTasksInfo> where T : ISveltoTask
+        public UpdateMonoRunner(string name) : base(name, new StandardRunningTasksInfo())
+        {}
+    }
+    
+    public class UpdateMonoRunner<T, TFlowModifier> : BaseRunner<T> where T: ISveltoTask 
+                                                                    where TFlowModifier:IRunningTasksInfo
+    {
+        public UpdateMonoRunner(string name, TFlowModifier modifier):base(name)
         {
-            public UpdateMonoRunner(string name) : base(name, new StandardRunningTasksInfo())
-            {
-            }
-        }
+            modifier.runnerName = name;
 
-        public class UpdateMonoRunner<T, TFlowModifier> : BaseRunner<T> where T : ISveltoTask
-                                                                        where TFlowModifier : IRunningTasksInfo
-        {
-            public UpdateMonoRunner(string name, TFlowModifier modifier) : base(name)
-            {
-                modifier.runnerName = name;
-
-                _processEnumerator =
-                    new CoroutineRunner<T>.Process<TFlowModifier, PlatformProfiler>
-                        (_newTaskRoutines, _coroutines, _flushingOperation, modifier);
-
-                UnityCoroutineRunner.StartUpdateCoroutine(_processEnumerator);
-            }
+            _processEnumerator =
+                new CoroutineRunner<T>.Process<TFlowModifier, PlatformProfiler>
+                (_newTaskRoutines, _coroutines, _flushingOperation, modifier);
+            
+            UnityCoroutineRunner.StartUpdateCoroutine(_processEnumerator);
         }
     }
 }

@@ -64,7 +64,7 @@ namespace Svelto.Tasks
             _newTaskRoutines.Clear();
         }
 
-        void IInternalRunner<T>.StartCoroutine(ref T task, bool immediate)
+        public void StartCoroutine(ref T task, bool immediate)
         {
             _newTaskRoutines.Enqueue(task);
             

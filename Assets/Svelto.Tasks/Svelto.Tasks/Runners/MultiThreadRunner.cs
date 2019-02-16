@@ -13,20 +13,17 @@ using System.Threading.Tasks;
 
 namespace Svelto.Tasks
 {
-    namespace Lean
+    public sealed class MultiThreadRunner:MultiThreadRunner<LeanSveltoTask<IEnumerator<TaskContract>>>
     {
-        public sealed class MultiThreadRunner<T>:Svelto.Tasks.MultiThreadRunner<LeanSveltoTask<T>> where T : IEnumerator<TaskContract>
+        public MultiThreadRunner(string name, bool relaxed = false, bool tightTasks = false) : base(name, relaxed, tightTasks)
         {
-            public MultiThreadRunner(string name, bool relaxed = false, bool tightTasks = false) : base(name, relaxed, tightTasks)
-            {
-            }
+        }
 
-            public MultiThreadRunner(string name, float intervalInMs) : base(name, intervalInMs)
-            {
-            }
-        }   
+        public MultiThreadRunner(string name, float intervalInMs) : base(name, intervalInMs)
+        {
+        }
     }
-    
+
     public class MultiThreadRunner<TTask> : MultiThreadRunner<TTask, StandardRunningTasksInfo> where TTask : ISveltoTask
     {
         public MultiThreadRunner(string name, bool relaxed = false, bool tightTasks = false) : 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Svelto.Common;
 using Svelto.DataStructures;
@@ -23,6 +24,17 @@ namespace Svelto.Tasks
         }
     }
     
+    namespace ExtraLean
+    {
+        public sealed class UnityJobRunner : UnityJobRunner<ExtraLeanSveltoTask<IEnumerator>>
+        {
+            public UnityJobRunner(string name, bool relaxed = false, bool tightTasks = false) :
+                base(name, relaxed, tightTasks)
+            {
+            }
+        }
+    }
+
     public class UnityJobRunner<TTask> : UnityJobRunner<TTask, StandardRunningTasksInfo> where TTask : ISveltoTask
     {
         public UnityJobRunner(string name, bool relaxed = false, bool tightTasks = false) : 

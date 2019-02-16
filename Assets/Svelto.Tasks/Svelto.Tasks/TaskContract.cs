@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Runtime.InteropServices;
-using Svelto.Tasks.Enumerators;
 
 namespace Svelto.Tasks
 {
@@ -28,11 +27,6 @@ namespace Svelto.Tasks
         {
             _currentState          = states.breakit;
             _returnObjects.breakIt = breakit;
-        }
-        
-        public TaskContract(Yield yieldIt) : this()
-        {
-            _currentState = states.yieldit;
         }
 
         public TaskContract(float val) : this()
@@ -85,7 +79,7 @@ namespace Svelto.Tasks
 
         public static implicit operator TaskContract(ContinuationEnumerator continuation)
         {
-            return continuation.SimpleContinue();
+            return new TaskContract(continuation);
         }
 
         public static implicit operator TaskContract(Break breakit)
@@ -95,23 +89,21 @@ namespace Svelto.Tasks
 
         public static implicit operator TaskContract(Yield yieldit)
         {
-            return new TaskContract(yieldit);
+            return new TaskContract();
         }
 
         public int ToInt()
         {
+            DBC.Tasks.Check.Require(_currentState == states.value, "invalid state");
+            
             return _returnValue.int32;
-        }
-        
-        public float ToFloat()
-        {
-            return _returnValue.single;
         }
         
         public Break breakit
         {
             get { return _currentState == states.breakit ?_returnObjects.breakIt : null; }
         }
+
 
         public IEnumerator enumerator
         {
@@ -127,20 +119,16 @@ namespace Svelto.Tasks
         {
             get { return _currentState == states.value ? _returnObjects.reference : null; }
         }
-        
-        public bool hasValue
-        {
-            get { return _currentState == states.value; }
-        }
 
         public bool yieldIt
         {
             get { return _currentState == states.yieldit; }
         }
-        
-        fieldValues  _returnValue;
+
+        readonly fieldValues  _returnValue;
         readonly fieldObjects _returnObjects;
         readonly states       _currentState;
+        
 
         enum states
         {

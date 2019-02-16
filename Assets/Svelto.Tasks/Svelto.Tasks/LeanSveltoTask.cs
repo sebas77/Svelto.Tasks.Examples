@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using Svelto.Tasks.Enumerators;
 using Svelto.Tasks.Internal;
 
 namespace Svelto.Tasks
@@ -22,8 +23,8 @@ namespace Svelto.Tasks
 #if GENERATE_NAME
             _name = task.ToString();
 #endif
-            _continuationEnumerator               = ContinuationWrapperPool.RetrieveFromPool();
-            _sveltoTask                          = new SveltoTaskWrapper<TTask, IInternalRunner<LeanSveltoTask<TTask>>>(ref task, runner);
+            _continuationEnumerator             = ContinuationPool.RetrieveFromPool();
+            _sveltoTask                         = task;
             _threadSafeSveltoTaskStates.started = true;
             
             runner.StartCoroutine(ref this, immediate);
@@ -78,8 +79,8 @@ namespace Svelto.Tasks
             if (completed == true)
             {
                 _continuationEnumerator.Completed();
-                ContinuationWrapperPool.PushBack(_continuationEnumerator);
-                _continuationEnumerator                  = null;
+                
+                _continuationEnumerator               = null;
                 _threadSafeSveltoTaskStates.completed = true;
                         
                 return false;
@@ -88,9 +89,9 @@ namespace Svelto.Tasks
             return true;
         }
 
-        SveltoTaskWrapper<TTask, IInternalRunner<LeanSveltoTask<TTask>>> _sveltoTask;
+        TTask _sveltoTask;
         SveltoTaskState                                                  _threadSafeSveltoTaskStates;
-        ContinuationEnumerator                                              _continuationEnumerator;
+        ContinuationEnumerator                                           _continuationEnumerator;
 #if GENERATE_NAME
         string _name;
 #endif

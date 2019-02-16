@@ -1,3 +1,4 @@
+using System;
 using Svelto.DataStructures;
 using Svelto.Tasks.Enumerators;
 
@@ -15,13 +16,18 @@ namespace Svelto.Tasks.Internal
             ContinuationEnumerator task;
 
             if (_pool.Dequeue(out task))
+            {
+                GC.ReRegisterForFinalize(task);
+
                 return task;
+            }
 
             return CreateEmpty();
         }
 
         public static void PushBack(ContinuationEnumerator task)
         {
+            GC.SuppressFinalize(task); //will be register again once pulled from the pool
             _pool.Enqueue(task);
         }
 

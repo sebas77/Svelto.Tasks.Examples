@@ -90,9 +90,9 @@ public static class TaskRunnerExtensions
         var quickIterations = 0;
 
         if (_timeout < 0)
-            while (enumerator.MoveNext())
-                ;
-        else if (_timeout == 0)
+            while (enumerator.MoveNext());
+        else 
+        if (_timeout == 0)
             while (enumerator.MoveNext())
                 ThreadUtility.Wait(ref quickIterations);
         else

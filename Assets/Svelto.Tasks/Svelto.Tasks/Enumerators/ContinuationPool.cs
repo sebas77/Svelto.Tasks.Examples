@@ -1,10 +1,11 @@
 using Svelto.DataStructures;
+using Svelto.Tasks.Enumerators;
 
 namespace Svelto.Tasks.Internal
 {
-    static class ContinuationWrapperPool
+    static class ContinuationPool
     {
-        static ContinuationWrapperPool()
+        static ContinuationPool()
         {
             for (int i = 0; i < 1000; i++) _pool.Enqueue(new ContinuationEnumerator());
         }
@@ -24,7 +25,7 @@ namespace Svelto.Tasks.Internal
             _pool.Enqueue(task);
         }
 
-        static ContinuationEnumerator CreateEmpty()
+        static ContinuationEnumerator CreateEmpty() 
         {
             return new ContinuationEnumerator();
         }

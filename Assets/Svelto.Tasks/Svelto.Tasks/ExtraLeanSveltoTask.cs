@@ -37,7 +37,7 @@ namespace Svelto.Tasks
 #if GENERATE_NAME
             if (_name == null)
                 _name = base.ToString();
-    
+
             return _name;
 #else
             return "ExtraLeanSveltoTask";
@@ -63,6 +63,7 @@ namespace Svelto.Tasks
 
             bool completed;
             if (_threadSafeSveltoTaskStates.explicitlyStopped == false)
+            {
                 try
                 {
                     completed = !_runningTask.MoveNext();
@@ -70,10 +71,11 @@ namespace Svelto.Tasks
                 catch (Exception e)
                 {
                     completed = true;
-
+    
                     Console.LogException("a Svelto.Tasks task threw an exception at:  "
                                             .FastConcat(ToString()), e);
                 }
+            }
             else
                 completed = true;
 
@@ -91,7 +93,7 @@ namespace Svelto.Tasks
         TTask           _runningTask;
 
 #if GENERATE_NAME
-        string                _name;
+        string _name;
 #endif
 #if DEBUG && !PROFILER
         static readonly bool IS_TASK_STRUCT = typeof(TTask).IsValueType;

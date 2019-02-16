@@ -16,6 +16,16 @@ namespace Svelto.Tasks
             }
         }
     }
+    
+    namespace ExtraLean.Unity
+    {
+        public class UpdateMonoRunner<T> : Svelto.Tasks.Unity.UpdateMonoRunner<ExtraLeanSveltoTask<T>> where T : IEnumerator
+        {
+            public UpdateMonoRunner(string name) : base(name)
+            {
+            }
+        }
+    }
 
     namespace Unity
     {

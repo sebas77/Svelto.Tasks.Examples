@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using PerformanceMT;
 using Svelto.Tasks;
 using Svelto.Tasks.Enumerators;
@@ -31,49 +32,30 @@ namespace Test.Editor.PerformanceMT
             for (int i = 0; i < 150; i++)
             {
                 GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-
-                sphere.AddComponent<DoSomethingHeavyMT>();
+                Destroy(sphere.GetComponent<SphereCollider>());
 
                 sphere.transform.parent = this.transform;
-
+                //
+                //queue and run tasks on the standard multi thread runner
+                //
+                UpdateIt(sphere.transform).RunOn(StandardSchedulers.updateScheduler);
                 CalculateAndShowNumber(sphere.GetComponent<Renderer>()).RunOn(StandardSchedulers.multiThreadScheduler);
             }
         }
-#if UNITY_EDITOR
-        void LogPauseState(PauseState obj)
-        {
-            if (obj == PauseState.Paused)
-                TaskRunner.Pause();
-            else
-                TaskRunner.Resume();
-        }
-#endif        
-
-        void OnDisable()
-        {
-            foreach (Transform trans in transform)
-            {
-                Destroy(trans.gameObject);
-            }
-            
-            _unityThreadRunner.Dispose();
-        }
         
-        void Update()
+        IEnumerator<TaskContract> UpdateIt(Transform transform)
         {
-            if (Input.anyKeyDown)
+            var direction = new Vector3(Mathf.Cos(UnityEngine.Random.Range(0, 3.14f)) / 1000, Mathf.Sin(UnityEngine.Random.Range(0, 3.14f) / 1000));
+            
+            while (true) 
             {
-                GetComponent<SpawnObjectsMT>().enabled = false;
-                GetComponent<SpawnObjects>().enabled = true;
-            }
-        }
+                var transformPosition = transform.position;
+                transformPosition.x += direction.x;
+                transformPosition.y += direction.y;
+                transform.position  =  transformPosition;
 
-        void OnApplicationPause(bool pauseStatus)
-        {
-            if (pauseStatus == true)
-                TaskRunner.Pause();
-            else
-                TaskRunner.Resume();
+                yield return Yield.It;
+            }
         }
 
         UpdateMonoRunner<LocalFunctionEnumerator<int>> _unityThreadRunner;
@@ -95,7 +77,7 @@ namespace Test.Editor.PerformanceMT
 
                 return false;
             }
-
+            
             while (true)
             {
                 //passing the execution to an enumerator is possible only through the Continue() extension method.
@@ -140,6 +122,45 @@ namespace Test.Editor.PerformanceMT
 
                 yield return --a * 333; //the result can be processed
             }
+        }
+        
+#if UNITY_EDITOR
+        void LogPauseState(PauseState obj)
+        {
+            if (obj == PauseState.Paused)
+                TaskRunner.Pause();
+            else
+                TaskRunner.Resume();
+        }
+#endif        
+
+        void OnDisable()
+        {
+            foreach (Transform trans in transform)
+            {
+                Destroy(trans.gameObject);
+            }
+         
+            //don't forget to dispose the runners!
+            _unityThreadRunner.Dispose();
+            TaskRunner.StopAndCleanupAllDefaultSchedulers();
+        }
+        
+        void Update()
+        {
+            if (Input.anyKeyDown)
+            {
+                GetComponent<SpawnObjectsMT>().enabled = false;
+                GetComponent<SpawnObjects>().enabled   = true;
+            }
+        }
+
+        void OnApplicationPause(bool pauseStatus)
+        {
+            if (pauseStatus == true)
+                TaskRunner.Pause();
+            else
+                TaskRunner.Resume();
         }
         
         readonly Random

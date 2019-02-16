@@ -19,6 +19,7 @@ namespace Svelto.Tasks
         public static void StopAndCleanupAllDefaultSchedulers()
         {
             Lean.StandardSchedulers.KillSchedulers();
+            ExtraLean.StandardSchedulers.KillSchedulers();
         }
 
         static TaskRunner()
@@ -37,11 +38,13 @@ namespace Svelto.Tasks
         public static void Pause()
         {
             Lean.StandardSchedulers.Pause();
+            ExtraLean.StandardSchedulers.Pause();
         }
 
         public static void Resume()
         {
             Lean.StandardSchedulers.Resume();
+            ExtraLean.StandardSchedulers.Resume();
         }
     }
 }

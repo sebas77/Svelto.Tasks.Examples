@@ -24,6 +24,16 @@ namespace Svelto.Tasks
             }
         }
     }
+    
+    namespace ExtraLean.Unity
+    {
+        public class CoroutineMonoRunner<T> : Svelto.Tasks.Unity.UpdateMonoRunner<ExtraLeanSveltoTask<T>> where T : IEnumerator
+        {
+            public CoroutineMonoRunner(string name) : base(name)
+            {
+            }
+        }
+    }
 
     namespace Unity
     {

@@ -76,6 +76,7 @@
     <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\Enumerators\Unity\YieldInstructionEnumerator.cs" />
     <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\Enumerators\WaitForSecondsEnumerator.cs" />
     <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\Enumerators\WaitForSignal.cs" />
+    <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\ExtraLeanSveltoTask.cs" />
     <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\ITaskRoutine.cs" />
     <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\LeanSveltoTask.cs" />
     <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\Parallelism\IMultiThreadParallelizable.cs" />
@@ -112,6 +113,7 @@
     <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\Runners\Unity\UnityJobRunner.cs" />
     <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\Runners\Unity\UpdateMonoRunner.cs" />
     <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\ServiceTasks\IServiceTask.cs" />
+    <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\StandardExtraLeanSchedulers.cs" />
     <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\StandardLeanSchedulers.cs" />
     <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\StandardTaskRoutineSchedulers.cs" />
     <Compile Include="Assets\Svelto.Tasks\Svelto.Tasks\SveltoTask.cs" />

@@ -23,8 +23,8 @@ namespace Svelto.Tasks
 #if GENERATE_NAME
             _name = task.ToString();
 #endif
-            _continuationEnumerator             = ContinuationPool.RetrieveFromPool();
-            _sveltoTask                         = task;
+            _continuationEnumerator               = ContinuationPool.RetrieveFromPool();
+            _sveltoTask                          = new SveltoTaskWrapper<TTask, IInternalRunner<LeanSveltoTask<TTask>>>(ref task, runner);
             _threadSafeSveltoTaskStates.started = true;
             
             runner.StartCoroutine(ref this, immediate);
@@ -79,8 +79,7 @@ namespace Svelto.Tasks
             if (completed == true)
             {
                 _continuationEnumerator.Completed();
-                
-                _continuationEnumerator               = null;
+                _continuationEnumerator                  = null;
                 _threadSafeSveltoTaskStates.completed = true;
                         
                 return false;
@@ -89,9 +88,9 @@ namespace Svelto.Tasks
             return true;
         }
 
-        TTask _sveltoTask;
+        SveltoTaskWrapper<TTask, IInternalRunner<LeanSveltoTask<TTask>>> _sveltoTask;
         SveltoTaskState                                                  _threadSafeSveltoTaskStates;
-        ContinuationEnumerator                                           _continuationEnumerator;
+        ContinuationEnumerator                                              _continuationEnumerator;
 #if GENERATE_NAME
         string _name;
 #endif

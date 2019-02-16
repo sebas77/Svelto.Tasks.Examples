@@ -58,7 +58,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\Testbeds\PerformanceMT\DoSomethingHeavy.cs" />
-    <Compile Include="Assets\Testbeds\PerformanceMT\DoSomethingHeavyMT.cs" />
     <Compile Include="Assets\Testbeds\PerformanceMT\SpawnObjects.cs" />
     <Compile Include="Assets\Testbeds\PerformanceMT\SpawnObjectsMT.cs" />
     <Compile Include="Assets\Testbeds\TimeSlice\TimeSlice.cs" />

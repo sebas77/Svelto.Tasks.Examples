@@ -85,7 +85,7 @@ namespace Svelto.Tasks
 
         public static implicit operator TaskContract(ContinuationEnumerator continuation)
         {
-            return continuation.SimpleContinue();
+            return new TaskContract(continuation);
         }
 
         public static implicit operator TaskContract(Break breakit)

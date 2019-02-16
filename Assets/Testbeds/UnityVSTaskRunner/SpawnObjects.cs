@@ -2,8 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using Assets;
 using Svelto.Tasks;
-using Svelto.Tasks.Lean;
-using Svelto.Tasks.Lean.Unity;
+using Svelto.Tasks.ExtraLean;
+using Svelto.Tasks.ExtraLean.Unity;
 using UnityEngine;
 
 namespace Test.Editor.UnityVSTaskRunner
@@ -46,7 +46,7 @@ namespace Test.Editor.UnityVSTaskRunner
             }
 
             var parent2 = parents[1] = new GameObject();
-            parent2.transform.parent = this.transform;
+            parent2.transform.parent = transform;
             
             //
             //Initialize 15k GameObject and push 15k svelto tasks. Note that in ECS you probably
@@ -68,7 +68,6 @@ namespace Test.Editor.UnityVSTaskRunner
                 UpdateIt(sphere.transform).RunOn(StandardSchedulers.updateScheduler);
                 //Special version, the runner can run dedicated tasks as struct. Zero allocation!
                 new UpdateItStruct(sphere.transform).RunOn(_fastRunner);
-
             }
             
             _fastRunner.Pause();
@@ -138,6 +137,7 @@ namespace Test.Editor.UnityVSTaskRunner
         void OnDisable()
         {
             _fastRunner.Dispose();
+            TaskRunner.StopAndCleanupAllDefaultSchedulers();
         }
 
         int                 index;
@@ -149,7 +149,7 @@ namespace Test.Editor.UnityVSTaskRunner
         
         //this runs for ever! However we can control its execution in many ways. For this example
         //we pause the runner that runs it.
-        IEnumerator<TaskContract> UpdateIt(Transform transform)
+        IEnumerator UpdateIt(Transform transform)
         {
             var direction = new Vector3(Mathf.Cos(Random.Range(0, 3.14f)) / 1000, Mathf.Sin(Random.Range(0, 3.14f) / 1000));
             
@@ -164,7 +164,7 @@ namespace Test.Editor.UnityVSTaskRunner
             }
         }
         
-        struct UpdateItStruct: IEnumerator<TaskContract>
+        struct UpdateItStruct: IEnumerator
         {
             public bool MoveNext()
             {
@@ -178,9 +178,11 @@ namespace Test.Editor.UnityVSTaskRunner
 
             public void Reset() { throw new System.NotImplementedException(); }
 
-            TaskContract IEnumerator<TaskContract>.Current => throw new System.NotImplementedException();
-
-            public object Current { get => throw new System.NotImplementedException(); }
+            public object Current
+            {
+                get => throw new System.NotImplementedException();
+                set => throw new System.NotImplementedException();
+            }
 
             readonly Transform _transform;
             readonly Vector3   _dir;
@@ -189,11 +191,6 @@ namespace Test.Editor.UnityVSTaskRunner
             {
                 _transform = transform;
                 _dir = new Vector2(Mathf.Cos(Random.Range(0, 3.14f)) / 1000, Mathf.Sin(Random.Range(0, 3.14f) / 1000));
-            }
-
-            public void Dispose()
-            {
-                throw new System.NotImplementedException();
             }
         }
     }

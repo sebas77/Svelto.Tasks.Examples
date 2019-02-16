@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
@@ -16,6 +17,20 @@ namespace Svelto.Tasks
     namespace Lean
     {
         public sealed class MultiThreadRunner<T>:Svelto.Tasks.MultiThreadRunner<LeanSveltoTask<T>> where T : IEnumerator<TaskContract>
+        {
+            public MultiThreadRunner(string name, bool relaxed = false, bool tightTasks = false) : base(name, relaxed, tightTasks)
+            {
+            }
+
+            public MultiThreadRunner(string name, float intervalInMs) : base(name, intervalInMs)
+            {
+            }
+        }   
+    }
+    
+    namespace ExtraLean
+    {
+        public sealed class MultiThreadRunner<T>:Svelto.Tasks.MultiThreadRunner<ExtraLeanSveltoTask<T>> where T : IEnumerator
         {
             public MultiThreadRunner(string name, bool relaxed = false, bool tightTasks = false) : base(name, relaxed, tightTasks)
             {

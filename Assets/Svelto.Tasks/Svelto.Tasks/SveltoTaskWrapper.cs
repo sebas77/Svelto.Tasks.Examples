@@ -29,7 +29,7 @@ namespace Svelto.Tasks.Internal
             if (Current.yieldIt == true) 
                return true;
     
-            if (Current.breakit == Break.It || Current.breakit == Break.AndStop)
+            if (Current.breakit == Break.It || Current.breakit == Break.AndStop || Current.hasValue == true)
                 return false;
 
             if (Current.enumerator != null && _runner != null)

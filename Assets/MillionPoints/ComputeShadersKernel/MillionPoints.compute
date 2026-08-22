@@ -1,0 +1,89 @@
+﻿#pragma kernel MainCS
+
+#include "UnityCG.cginc"
+
+// Hash function from H. Schechter & R. Bridson, goo.gl/RXiKaH
+uint Hash(uint s)
+{
+	s ^= 2747636419u;
+	s *= 2654435769u;
+	s ^= s >> 16;
+	s *= 2654435769u;
+	s ^= s >> 16;
+	s *= 2654435769u;
+	return s;
+}
+
+float Random(uint seed)
+{
+	return float(Hash(seed)) / 4294967295.0; // 2^32-1
+}
+
+// Uniformaly distributed points on a unit sphere
+// http://mathworld.wolfram.com/SpherePointPicking.html
+float3 RandomUnitVector(uint seed)
+{
+	float PI2 = 6.28318530718;
+	float z = 1 - 2 * Random(seed);
+	float xy = sqrt(1.0 - z * z);
+	float sn, cs;
+	sincos(PI2 * Random(seed + 1), sn, cs);
+	return float3(sn * xy, cs * xy, z);
+}
+
+// Uniformaly distributed points inside a unit sphere
+float3 RandomVector(uint seed)
+{
+	return RandomUnitVector(seed) * sqrt(Random(seed + 2));
+}
+
+#define ThreadBlockSize 256
+
+struct ParticleData
+{
+	float3 BasePosition;
+	float3 Position;
+	float3 Albedo;
+	float RotationSpeed;
+};
+
+RWStructuredBuffer<ParticleData> _CubeDataBuffer;
+
+int _particleCount;
+float _time;	// _Time is already defined at UnityUI.cginc?
+
+float4 quat_from_axis_angle(float3 axis, float angle)
+{
+	float4 qr;
+	float half_angle = (angle * 0.5) * 3.14159 / 180.0;
+	qr.x = axis.x * sin(half_angle);
+	qr.y = axis.y * sin(half_angle);
+	qr.z = axis.z * sin(half_angle);
+	qr.w = cos(half_angle);
+	return qr;
+}
+
+float3 rotate_position(float3 position, float3 axis, float angle)
+{
+	float4 q = quat_from_axis_angle(axis, angle);
+	float3 v = position.xyz;
+	return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
+}
+
+[numthreads(ThreadBlockSize, 1, 1)]
+void MainCS(uint3 id : SV_DispatchThreadID)
+{
+	// get index
+	const unsigned int index = id.x;
+	if (index >= _particleCount)
+		return;
+
+	float3 pos = _CubeDataBuffer[index].BasePosition;
+	float speed = _CubeDataBuffer[index].RotationSpeed;
+
+	// Construct the tangent space
+	float3 tx = normalize(pos);
+	float3 ty = normalize(cross(RandomVector(index + 1), tx));
+
+	_CubeDataBuffer[index].Position = rotate_position(pos, ty, speed * _time);
+}

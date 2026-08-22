@@ -45,7 +45,7 @@ namespace Svelto.DataStructures
         public void OverwriteAt<T>(in T value, uint cursor)where T : unmanaged => _sveltoStream.OverwriteAt(AsSpanInternal(), value, cursor);
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteSpan<T>(in Span<T> valueSpan) where T : unmanaged => _sveltoStream.WriteSpan(AsSpanInternal(), valueSpan);
+        public void WriteSpan<T>(Span<T> valueSpan) where T : unmanaged => _sveltoStream.WriteSpan(AsSpanInternal(), valueSpan);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear() => _sveltoStream.Clear();

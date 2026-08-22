@@ -24,7 +24,7 @@ namespace Svelto.DataStructures
         public void UnsafeWrite<T>(in T value, int unmanagedStructSize) where T : struct => _sveltoStream.UnsafeWrite(AsSpanInternal(), value, unmanagedStructSize);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteSpan<T>(in Span<T> valueSpan) where T : unmanaged => _sveltoStream.WriteSpan(AsSpanInternal(), valueSpan);
+        public void WriteSpan<T>(Span<T> valueSpan) where T : unmanaged => _sveltoStream.WriteSpan(AsSpanInternal(), valueSpan);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Clear() => _sveltoStream.Clear();

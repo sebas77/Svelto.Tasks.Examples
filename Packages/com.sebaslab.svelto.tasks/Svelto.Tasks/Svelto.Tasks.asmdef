@@ -2,7 +2,8 @@
     "name": "Svelto.Tasks",
     "rootNamespace": "",
     "references": [
-        "Svelto.Common"
+        "Svelto.Common",
+        "Unity.Burst"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

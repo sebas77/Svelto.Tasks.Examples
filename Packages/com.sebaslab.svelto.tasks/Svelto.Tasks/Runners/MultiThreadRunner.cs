@@ -304,48 +304,10 @@ namespace Svelto.Tasks
 
                 try
                 {
-                    while (true)
-                    {
-                        using (_profiler.Sample(name))
-                        {
-                            if (_intervalInTicks > 0)
-                                _watchForInterval?.Restart();
-
-                            //if the runner is paused enable the locking mechanism
-                            if (_flushingOperation.paused == true && _flushingOperation.stopping == false)
-                                _lockingMechanism();
-
-                            if (_processor == null)
-                                throw new MultiThreadRunnerException("No flow modifier has been set for the runner ".FastConcat(name));
-
-                            if (_processor.MoveNext(_profiler) == false)
-                                break;
-
-                            //If the runner is not stopped
-                            if (_flushingOperation.stopping == false)
-                            {
-                                //if there is an interval time between calls we need to wait for it
-                                if (_intervalInTicks > 0)
-                                    WaitForInterval();
-
-                                //if there aren't task left we put the thread in pause
-                                if (numberOfRunningTasks == 0)
-                                {
-                                    if (numberOfQueuedTasks == 0)
-                                        _lockingMechanism();
-                                    else if (_isRunningTightTasks == false)
-                                        ThreadUtility.Wait(ref _yieldingCount, 16);
-                                }
-                                else
-                                {
-                                    //if it's not running tight tasks, let's let the runner breath a bit
-                                    //every so often
-                                    if (_isRunningTightTasks == false)
-                                        ThreadUtility.Wait(ref _yieldingCount, 16);
-                                }
-                            }
-                        }
-                    }
+                    //the loop body (including the using) lives in its own method on purpose:
+                    //IL2CPP would otherwise emit two nested Finally blocks in one function,
+                    //which crashes the MSVC compiler with C1001 (internal compiler error)
+                    while (RunOneIteration()) { }
                 }
                 catch
                 {
@@ -359,6 +321,51 @@ namespace Svelto.Tasks
                 finally
                 {
                     _onThreadKilled?.Invoke();
+                }
+            }
+
+            bool RunOneIteration()
+            {
+                using (_profiler.Sample(name))
+                {
+                    if (_intervalInTicks > 0)
+                        _watchForInterval?.Restart();
+
+                    //if the runner is paused enable the locking mechanism
+                    if (_flushingOperation.paused == true && _flushingOperation.stopping == false)
+                        _lockingMechanism();
+
+                    if (_processor == null)
+                        throw new MultiThreadRunnerException("No flow modifier has been set for the runner ".FastConcat(name));
+
+                    if (_processor.MoveNext(_profiler) == false)
+                        return false;
+
+                    //If the runner is not stopped
+                    if (_flushingOperation.stopping == false)
+                    {
+                        //if there is an interval time between calls we need to wait for it
+                        if (_intervalInTicks > 0)
+                            WaitForInterval();
+
+                        //if there aren't task left we put the thread in pause
+                        if (numberOfRunningTasks == 0)
+                        {
+                            if (numberOfQueuedTasks == 0)
+                                _lockingMechanism();
+                            else if (_isRunningTightTasks == false)
+                                ThreadUtility.Wait(ref _yieldingCount, 16);
+                        }
+                        else
+                        {
+                            //if it's not running tight tasks, let's let the runner breath a bit
+                            //every so often
+                            if (_isRunningTightTasks == false)
+                                ThreadUtility.Wait(ref _yieldingCount, 16);
+                        }
+                    }
+
+                    return true;
                 }
             }
 
@@ -394,10 +401,8 @@ namespace Svelto.Tasks
             /// Acquire: The thread is spinning/waiting.
             /// Release: The thread has been signaled to wake up (by AddTask, Resume, Stop, etc.).
             /// </summary>
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             void QuickLockingMechanism()
             {
-               
                     var quickIterations = 0;
                     var frequency       = 128;
 
@@ -417,11 +422,9 @@ namespace Svelto.Tasks
 
                         ThreadUtility.Wait(ref quickIterations, frequency);
                     }
-               
-              
+                    
                     //After the spinning, just revert to the normal locking mechanism
                     RelaxedLockingMechanism();
-               
             }
 
             /// <summary>

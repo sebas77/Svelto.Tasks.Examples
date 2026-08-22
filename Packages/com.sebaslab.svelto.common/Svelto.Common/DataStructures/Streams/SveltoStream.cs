@@ -17,7 +17,7 @@ namespace Svelto.DataStructures
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref T Read<T>(in Span<byte> source) where T : unmanaged
+        public ref T Read<T>(Span<byte> source) where T : unmanaged
         {
             int currentSize = MemoryUtilities.SizeOf<T>();
             int readCursor = _cursor;
@@ -80,7 +80,7 @@ namespace Svelto.DataStructures
         
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Write<T>(in Span<byte> destinationSpan, in T value) where T : unmanaged
+        public void Write<T>(Span<byte> destinationSpan, in T value) where T : unmanaged
         {
             int size = MemoryUtilities.SizeOf<T>();
             if (_cursor + size > capacity)
@@ -94,7 +94,7 @@ namespace Svelto.DataStructures
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void OverwriteAt<T>(in Span<byte> destinationSpan, in T value, uint start) where T : unmanaged
+        public void OverwriteAt<T>(Span<byte> destinationSpan, in T value, uint start) where T : unmanaged
         {
             int size = MemoryUtilities.SizeOf<T>();
             
@@ -105,7 +105,7 @@ namespace Svelto.DataStructures
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void UnsafeWrite<T>(Span<byte> destinationSpan, in T item, int size) where T : struct
+        public void UnsafeWrite<T>(Span<byte> destinationSpan, T item, int size) where T : struct
         {
             if (_cursor + size > capacity)
             {
@@ -122,14 +122,14 @@ namespace Svelto.DataStructures
             //I cannot use span for this reason
             Unsafe.CopyBlockUnaligned(
                 ref Unsafe.Add(ref MemoryMarshal.GetReference(destinationSpan), _cursor),
-                ref Unsafe.As<T, byte>(ref Unsafe.AsRef(item)), (uint)size);
+                ref Unsafe.As<T, byte>(ref item), (uint)size);
 
             _cursor += size;
             length = _cursor;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteSpan<T>(in Span<byte> destinationSpan, in Span<T> valueSpan) where T : unmanaged
+        public void WriteSpan<T>(Span<byte> destinationSpan, Span<T> valueSpan) where T : unmanaged
         {
             int elementSize = MemoryUtilities.SizeOf<T>();
 
@@ -155,7 +155,7 @@ namespace Svelto.DataStructures
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Span<T> ReadSpan<T>(in Span<byte> source) where T : unmanaged
+        public Span<T> ReadSpan<T>(Span<byte> source) where T : unmanaged
         {
             // Read the byte-length of the span (ushort written by WriteSpan)
             ushort lengthToRead = Read<ushort>(source);

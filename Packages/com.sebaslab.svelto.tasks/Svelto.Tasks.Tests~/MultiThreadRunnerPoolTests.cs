@@ -172,6 +172,32 @@ namespace Svelto.Tasks.Tests
                 pool.AddTask(task, (0, new TombstoneHandle(0))));
         }
 
+        [Test]
+        public void TypedPool_AllowsStructTasksToScheduleChildrenAtRuntime()
+        {
+            using var completed = new CountdownEvent(64);
+            using var pool = new MultiThreadRunnerPool<DynamicStructTask>(
+                "TypedPool_AllowsStructTasksToScheduleChildrenAtRuntime", 4, true);
+
+            new DynamicStructTask(pool, completed, 64).RunOn(pool);
+
+            Assert.That(completed.Wait(2000), Is.True);
+        }
+
+        [Test]
+        public void TypedPool_PreservesStructStateAcrossSteps()
+        {
+            var steps = new Counter();
+            using var disposed = new ManualResetEventSlim(false);
+            using var pool = new MultiThreadRunnerPool<StatefulStructTask>(
+                "TypedPool_PreservesStructStateAcrossSteps", 1, true);
+
+            new StatefulStructTask(steps, disposed, 64).RunOn(pool);
+
+            Assert.That(disposed.Wait(2000), Is.True);
+            Assert.That(steps.value, Is.EqualTo(64));
+        }
+
         sealed class ThreadSet<T>
         {
             readonly HashSet<T> _set = new HashSet<T>();
@@ -272,6 +298,65 @@ namespace Svelto.Tasks.Tests
 
             readonly Counter _disposed;
             int _hasDisposed;
+        }
+
+        struct DynamicStructTask : IEnumerator, IDisposable
+        {
+            public DynamicStructTask(MultiThreadRunnerPool<DynamicStructTask> pool,
+                                     CountdownEvent completed, int children)
+            {
+                _pool = pool;
+                _completed = completed;
+                _children = children;
+            }
+
+            public object Current => null;
+
+            public bool MoveNext()
+            {
+                if (_children == 0)
+                {
+                    _completed.Signal();
+                    return false;
+                }
+
+                for (int i = 0; i < _children; i++)
+                    new DynamicStructTask(_pool, _completed, 0).RunOn(_pool);
+
+                return false;
+            }
+
+            public void Reset() { }
+            public void Dispose() { }
+
+            readonly MultiThreadRunnerPool<DynamicStructTask> _pool;
+            readonly CountdownEvent _completed;
+            readonly int _children;
+        }
+
+        struct StatefulStructTask : IEnumerator, IDisposable
+        {
+            public StatefulStructTask(Counter steps, ManualResetEventSlim disposed, int remainingSteps)
+            {
+                _steps = steps;
+                _disposed = disposed;
+                _remainingSteps = remainingSteps;
+            }
+
+            public object Current => null;
+
+            public bool MoveNext()
+            {
+                Interlocked.Increment(ref _steps.value);
+                return --_remainingSteps > 0;
+            }
+
+            public void Reset() { }
+            public void Dispose() => _disposed.Set();
+
+            readonly Counter _steps;
+            readonly ManualResetEventSlim _disposed;
+            int _remainingSteps;
         }
 
         sealed class Counter

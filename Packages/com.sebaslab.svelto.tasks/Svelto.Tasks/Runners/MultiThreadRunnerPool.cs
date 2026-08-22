@@ -26,9 +26,12 @@ namespace Svelto.Tasks.ExtraLean
             if (threadCount <= 0)
                 throw new MultiThreadRunnerPoolException("threadCount must be greater than zero");
 
-            _runners = new ExtraLean.MultiThreadRunner[threadCount];
+            _runners = new MultiThreadRunner[threadCount];
             for (int i = 0; i < threadCount; i++)
-                _runners[i] = new ExtraLean.MultiThreadRunner(name + " #" + i);
+            {
+                _runners[i] = new MultiThreadRunner(name + " #" + i, false, true);
+                _runners[i].Resume();
+            }
         }
 
         public MultiThreadRunnerPool(string name)
@@ -77,7 +80,69 @@ namespace Svelto.Tasks.ExtraLean
                 _runners[i].Dispose();
         }
 
-        readonly ExtraLean.MultiThreadRunner[] _runners;
+        readonly MultiThreadRunner[] _runners;
+        int _next = -1;
+        int _disposed;
+    }
+
+    /// <summary>
+    /// Typed variant of MultiThreadRunnerPool for allocation-free ExtraLean struct root tasks.
+    /// Tasks can add more root tasks while the pool is running.
+    /// </summary>
+    public sealed class MultiThreadRunnerPool<TTask> :
+        IRunner<Struct.ExtraLeanSveltoTask<TTask>>, IDisposable where TTask : struct, IEnumerator, IDisposable
+    {
+        public int numberOfRunners => _runners.Length;
+        public bool isDisposed => Volatile.Read(ref _disposed) == 1;
+
+        public MultiThreadRunnerPool(string name, int threadCount, bool tightTasks = false)
+        {
+            if (threadCount <= 0)
+                throw new MultiThreadRunnerPoolException("threadCount must be greater than zero");
+
+            _runners = new Struct.MultiThreadRunner<TTask>[threadCount];
+            for (int i = 0; i < threadCount; i++)
+                _runners[i] = new Struct.MultiThreadRunner<TTask>(name + " #" + i, false, tightTasks);
+        }
+
+        public MultiThreadRunnerPool(string name, bool tightTasks = false)
+            : this(name, Math.Max(1, Environment.ProcessorCount - 2), tightTasks)
+        {
+        }
+
+        public void AddTask(in Struct.ExtraLeanSveltoTask<TTask> task,
+            (int runningTaskIndexToReplace, TombstoneHandle parentSpawnedTaskIndex) index)
+        {
+            if (index.parentSpawnedTaskIndex != TombstoneHandle.Invalid)
+                throw new MultiThreadRunnerPoolException("MultiThreadRunnerPool accepts root tasks only");
+
+            if (isDisposed)
+                throw new MultiThreadRunnerPoolException("Cannot schedule tasks on a disposed MultiThreadRunnerPool");
+
+            int next = Interlocked.Increment(ref _next);
+            int runnerIndex = (int)((uint)next % (uint)_runners.Length);
+            _runners[runnerIndex].AddTask(task, index);
+        }
+
+        public void Stop()
+        {
+            if (isDisposed)
+                return;
+
+            for (int i = 0; i < _runners.Length; i++)
+                _runners[i].Stop();
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 1)
+                return;
+
+            for (int i = 0; i < _runners.Length; i++)
+                _runners[i].Dispose();
+        }
+
+        readonly Struct.MultiThreadRunner<TTask>[] _runners;
         int _next = -1;
         int _disposed;
     }

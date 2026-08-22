@@ -52,7 +52,7 @@ namespace Svelto.DataStructures
             _count = (uint)collection.Count;
         }
         
-        public FasterList(in Span<T> collection)
+        public FasterList(Span<T> collection)
         {
             _buffer = new T[collection.Length];
 

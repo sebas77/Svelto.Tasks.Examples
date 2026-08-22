@@ -5,7 +5,13 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 0
-    path: Assets/UnityVSTasks.unity
-    guid: 1979e43cf5056bc44977888a449cdb1c
+  - enabled: 1
+    path: Assets/Startup/Startup.unity
+    guid: 8127578ac81513f41b80e191eb131a7f
+  - enabled: 1
+    path: Assets/Labyrinth/LabyrinthDemo.unity
+    guid: ca3b6e28673db1f4eb7c10d27ad52cf1
+  - enabled: 1
+    path: Assets/MillionPoints/MillionPoints.unity
+    guid: 53204305ad8272a47813a119c64e5bb7
   m_configObjects: {}

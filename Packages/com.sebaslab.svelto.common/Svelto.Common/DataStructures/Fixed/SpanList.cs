@@ -5,7 +5,7 @@ public ref struct SpanList<T>
     Span<T> _buffer;
     int _count;
 
-    public SpanList(in Span<T> buffer)
+    public SpanList(Span<T> buffer)
     {
         _buffer = buffer;
         _count = 0;

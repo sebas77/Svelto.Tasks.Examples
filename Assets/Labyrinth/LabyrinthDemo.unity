@@ -213,8 +213,9 @@ GameObject:
   - component: {fileID: 2146266653}
   - component: {fileID: 2146266652}
   - component: {fileID: 2146266650}
-  - component: {fileID: 2146266654}
   - component: {fileID: 2146266655}
+  - component: {fileID: 2146266656}
+  - component: {fileID: 2146266657}
   m_Layer: 0
   m_Name: LabyrinthDisplay
   m_TagString: Untagged
@@ -294,32 +295,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &2146266654
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2146266649}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 82d8aaa638a64adbb738cb197d76eb01, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Test
-  labyrinthResourcePath: Labyrinths/Labyrinth_1024
-  labyrinthRenderer: {fileID: 0}
-  maxParallelAgents: 16
-  maxStepsPerAgent: 180
-  iterationsPerSearchChunk: 120
-  parallelTasks: 8
-  searchChunksPerMove: 4
-  artificialChunkDelaySeconds: 0.03
-  sampleStride: 4
-  wallThreshold: 0.5
-  paintRadiusPixels: 2
-  debugPaintSearch: 0
-  exploredColor: {r: 0.23529412, g: 0.47058824, b: 1, a: 1}
-  winningColor: {r: 1, g: 0.23529412, b: 0.23529412, a: 1}
 --- !u!114 &2146266655
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -334,7 +309,46 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LabyrinthPoolSearch
   labyrinthResourcePath: Labyrinths/Labyrinth_1024
   labyrinthRenderer: {fileID: 0}
+  sampleStride: 4
+  wallThreshold: 0.5
+  paintRadiusPixels: 2
+  exploredColor: {r: 0.23529412, g: 0.47058824, b: 1, a: 1}
+  winningColor: {r: 1, g: 0.23529412, b: 0.23529412, a: 1}
   threadCount: -1
+--- !u!114 &2146266656
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2146266649}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8370f02f1e997044186ccbab5ef6bfcc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LabyrinthFastSearch
+  labyrinthResourcePath: Labyrinths/Labyrinth_1024
+  labyrinthRenderer: {fileID: 0}
+  sampleStride: 4
+  wallThreshold: 0.5
+  paintRadiusPixels: 2
+  exploredColor: {r: 0.23529412, g: 0.47058824, b: 1, a: 1}
+  winningColor: {r: 1, g: 0.23529412, b: 0.23529412, a: 1}
+  threadCount: -1
+--- !u!114 &2146266657
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2146266649}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8c85f54c92e1c404485ee716cf2c262b, type: 3}
+  m_Name: ''
+  m_EditorClassIdentifier: Assembly-CSharp::LabyrinthSingleThreadSearch
+  labyrinthResourcePath: Labyrinths/Labyrinth_1024
+  labyrinthRenderer: {fileID: 0}
   sampleStride: 4
   wallThreshold: 0.5
   paintRadiusPixels: 2

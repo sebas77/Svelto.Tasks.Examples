@@ -2,7 +2,9 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading;
+using Svelto.Tasks;
 using Svelto.Tasks.ExtraLean;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
@@ -13,44 +15,29 @@ using Debug = UnityEngine.Debug;
 /// is globally claimed at most once and the winning path can be reconstructed. Nothing is painted
 /// while searching: when the search ends the whole explored area is painted once, then the winning
 /// path is painted over it.
+/// This is not the most efficent way to solve a maze, but it is a good demonstration of how to use Svelto.Tasks
+/// to implement a parallel algorithm through short lived tasks.
 /// </summary>
-public sealed class LabyrinthPoolSearch : MonoBehaviour
+public sealed class LabyrinthPoolSearch : LabyrinthSearchBase
 {
-    [Header("References")]
-    [SerializeField] string labyrinthResourcePath = "Labyrinths/Labyrinth_1024";
-    [SerializeField] Renderer labyrinthRenderer;
-
     [Header("Pool")]
     [SerializeField, Tooltip("-1 = default (ProcessorCount - 2)")]
     int threadCount = -1;
 
-    [Header("Grid")]
-    [SerializeField, Range(2, 16)] int sampleStride = 4;
-    [SerializeField, Range(0f, 1f)] float wallThreshold = 0.5f;
-
-    [Header("Painting")]
-    [SerializeField, Range(1, 8)] int paintRadiusPixels = 2;
-    [SerializeField] Color exploredColor = new Color32(60, 120, 255, 255);
-    [SerializeField] Color winningColor = new Color32(255, 60, 60, 255);
-
-    Texture2D _workingTexture;
-    Material _originalMaterial;
-    Material _runtimeMaterial;
-    Color32[] _workingPixels;
-    int _pixelWidth;
-    int _pixelHeight;
+    // Display name for the stats window (set by each subclass per the base class mechanism).
+    protected override string DisplayName => "PoolSearch";
 
     Graph _graph;
-    int _gridWidth;
-    int _gridHeight;
+    bool[] _passableGrid;
+    int[] _gridToNode;
     int[] _nodeToGridX;
     int[] _nodeToGridY;
-    List<int> _availableNodes;
 
     int _startNode;
     int _goalNode;
 
     MultiThreadRunnerPool _pool;
+    IteratorBlockPool<SearchBranchData> _searchBranchPool;
     int[] _predecessors;
 
     const int Unvisited = -2;
@@ -70,14 +57,17 @@ public sealed class LabyrinthPoolSearch : MonoBehaviour
             return;
         }
 
-        if (!PickDeterministicStartGoal(out _startNode, out _goalNode))
+        if (!TryPickDeterministicStartGoal(_passableGrid, out int startGridNode, out int goalGridNode))
         {
             Debug.LogError("Unable to determine deterministic start/goal in labyrinth.");
             enabled = false;
             return;
         }
 
-        _predecessors = new int[_graph.adjacency.Length];
+        _startNode = _gridToNode[startGridNode];
+        _goalNode = _gridToNode[goalGridNode];
+
+        _predecessors = new int[_graph.nodeCount];
         for (int i = 0; i < _predecessors.Length; i++)
             _predecessors[i] = Unvisited;
 
@@ -85,8 +75,10 @@ public sealed class LabyrinthPoolSearch : MonoBehaviour
 
         int workers = threadCount > 0 ? threadCount : Math.Max(1, Environment.ProcessorCount - 2);
         _pool = new MultiThreadRunnerPool("LabyrinthPoolSearch", workers);
+        _searchBranchPool = new IteratorBlockPool<SearchBranchData>(SearchBranch, "LabyrinthSearchBranch");
 
         _timerStart = Stopwatch.GetTimestamp();
+        MarkSolving(); // stats window: searching has started
         ScheduleBranch(_startNode);
     }
 
@@ -113,119 +105,104 @@ public sealed class LabyrinthPoolSearch : MonoBehaviour
         }
     }
 
-    void OnDestroy()
+    protected override void OnDestroy()
     {
         Interlocked.Exchange(ref _solved, 1);
-        _pool?.Stop();
 
         var spinWait = new SpinWait();
         while (Volatile.Read(ref _activeBranches) != 0)
             spinWait.SpinOnce();
 
         _pool?.Dispose();
-
-        if (labyrinthRenderer != null && labyrinthRenderer.sharedMaterial == _runtimeMaterial)
-            labyrinthRenderer.sharedMaterial = _originalMaterial;
-        if (_runtimeMaterial != null)
-            Destroy(_runtimeMaterial);
-        if (_workingTexture != null)
-            Destroy(_workingTexture);
+        _searchBranchPool?.Dispose();
+        DisposeRendering();
+        base.OnDestroy();
     }
 
-    IEnumerator SearchBranch(int node)
+    IEnumerator SearchBranch(SearchBranchData data)
     {
-        try
+        while (true)
         {
-            while (Volatile.Read(ref _solved) == 0)
+            int node = data.node;
+            int[] neighborOffsets = _graph.neighborOffsets;
+            int[] neighbors = _graph.neighbors;
+            try
             {
-                if (node == _goalNode)
+                while (Volatile.Read(ref _solved) == 0)
                 {
-                    StopSearch();
-                    yield break;
-                }
-
-                int claimedFirst = -1;
-                int claimedCount = 0;
-
-                GraphEdge[] edges = _graph.adjacency[node];
-                for (int i = 0; i < edges.Length; i++)
-                {
-                    int to = edges[i].to;
-                    if (Interlocked.CompareExchange(ref _predecessors[to], node, Unvisited) == Unvisited)
+                    if (node == _goalNode)
                     {
-                        if (claimedCount == 0)
-                            claimedFirst = to;
-                        claimedCount++;
+                        StopSearch();
+                        break;
                     }
+
+                    int claimedFirst = -1;
+                    int claimedCount = 0;
+
+                    int firstNeighbor = neighborOffsets[node];
+                    int endNeighbor = neighborOffsets[node + 1];
+                    for (int i = firstNeighbor; i < endNeighbor; i++)
+                    {
+                        int to = neighbors[i];
+                        if (Interlocked.CompareExchange(ref _predecessors[to], node, Unvisited) == Unvisited)
+                        {
+                            if (claimedCount == 0)
+                                claimedFirst = to;
+                            claimedCount++;
+                        }
+                    }
+
+                    if (claimedCount == 0)
+                        break; // dead end, nothing left to explore
+
+                    if (claimedCount == 1)
+                    {
+                        node = claimedFirst;
+                        continue;
+                    }
+
+                    // Keep one child local; only alternatives need a pool handoff.
+                    for (int i = firstNeighbor; i < endNeighbor; i++)
+                    {
+                        int to = neighbors[i];
+                        if (to != claimedFirst && _predecessors[to] == node)
+                        {
+                            if (Volatile.Read(ref _solved) == 0)
+                                ScheduleBranch(to);
+                        }
+                    }
+
+                    node = claimedFirst;
                 }
-
-                if (claimedCount == 0)
-                    yield break; // dead end, nothing left to explore
-
-                if (claimedCount == 1)
-                {
-                    node = claimedFirst; // keep walking through the single claimed neighbour
-                    yield return null;
-                    continue;
-                }
-
-                // true fork: schedule one child for every claimed neighbour, parent has no responsibility left
-                for (int i = 0; i < edges.Length; i++)
-                {
-                    int to = edges[i].to;
-                    if (_predecessors[to] == node)
-                        ScheduleBranch(to);
-                }
-
-                yield break;
             }
-        }
-        finally
-        {
-            if (Interlocked.Decrement(ref _activeBranches) == 0)
-                Volatile.Write(ref _searchEnd, Stopwatch.GetTimestamp());
+            finally
+            {
+                if (Interlocked.Decrement(ref _activeBranches) == 0)
+                    Volatile.Write(ref _searchEnd, Stopwatch.GetTimestamp());
+            }
+
+            yield return TaskContract.Break.It;
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     void ScheduleBranch(int node)
     {
-        if (Volatile.Read(ref _solved) != 0)
-            return;
-
         Interlocked.Increment(ref _activeBranches);
-        try
-        {
-            SearchBranch(node).RunOn(_pool);
-        }
-        catch
-        {
-            if (Interlocked.Decrement(ref _activeBranches) == 0)
-                Volatile.Write(ref _searchEnd, Stopwatch.GetTimestamp());
-            throw;
-        }
-    }
-
-    void StopSearch()
-    {
-        _pool.Stop();
-        Volatile.Write(ref _solved, 1);
+        var (data, branch) = _searchBranchPool.Get();
+        data.node = node;
+        branch.RunOn(_pool);
     }
 
     void Finish(bool hasSolution)
     {
-        long disposeStart = Stopwatch.GetTimestamp();
-        _pool.Dispose();
-        long disposeEnd = Stopwatch.GetTimestamp();
-
         long searchEnd = Volatile.Read(ref _searchEnd);
-        if (searchEnd == 0)
-            searchEnd = disposeStart;
-
-        long elapsedTicks = searchEnd - _timerStart + disposeEnd - disposeStart;
+        long elapsedTicks = searchEnd - _timerStart;
         long elapsedNs = (long)(elapsedTicks * (1_000_000_000.0 / Stopwatch.Frequency));
-
-        var winningPath = hasSolution ? ReconstructWinningPath() : null;
-
+        
+        _pool.Dispose();
+       
+        var winningPath = hasSolution ? BuildWinningPath(_predecessors, _goalNode, Unvisited) : null;
         // paint every explored node once
         for (int i = 0; i < _predecessors.Length; i++)
         {
@@ -246,267 +223,110 @@ public sealed class LabyrinthPoolSearch : MonoBehaviour
             Debug.Log($"LabyrinthPoolSearch found no path to the goal in {elapsedNs} ns ({elapsedNs / 1_000_000.0:F3} ms).");
         }
 
+        RecordCompletion(hasSolution, elapsedNs / 1_000_000.0); // stats window: store result once
         ApplyPaint();
-    }
-
-    void FinishAndReportNoPath()
-    {
-        Finish(hasSolution: false);
-    }
-
-    List<int> ReconstructWinningPath()
-    {
-        var path = new List<int>();
-        int cur = _goalNode;
-
-        while (cur >= 0 && cur != Unvisited)
-        {
-            path.Add(cur);
-            if (path.Count > _predecessors.Length)
-                break;
-            cur = _predecessors[cur];
-        }
-
-        path.Reverse();
-        return path;
-    }
-
-    // ============================================================
-    //  graph / texture helpers (copied from Labyrinth.cs, unmodified)
-    // ============================================================
-
-    bool TryInitializeTexture()
-    {
-        if (labyrinthRenderer == null)
-        {
-            GameObject go = GameObject.Find("LabyrinthDisplay");
-            if (go != null)
-                labyrinthRenderer = go.GetComponent<Renderer>();
-        }
-
-        Texture2D sourceTexture = null;
-        if (labyrinthRenderer != null && labyrinthRenderer.sharedMaterial != null)
-            sourceTexture = labyrinthRenderer.sharedMaterial.mainTexture as Texture2D;
-
-        if (sourceTexture == null)
-            sourceTexture = Resources.Load<Texture2D>(labyrinthResourcePath);
-
-        if (sourceTexture == null)
-            return false;
-
-        Texture2D readable = ExtractReadableTexture(sourceTexture);
-        _pixelWidth = readable.width;
-        _pixelHeight = readable.height;
-
-        _workingTexture = new Texture2D(_pixelWidth, _pixelHeight, TextureFormat.RGBA32, false)
-        {
-            wrapMode = TextureWrapMode.Clamp,
-            filterMode = FilterMode.Point
-        };
-
-        _workingPixels = readable.GetPixels32();
-        Destroy(readable);
-        _workingTexture.SetPixels32(_workingPixels);
-        _workingTexture.Apply(false, false);
-
-        if (labyrinthRenderer != null && labyrinthRenderer.sharedMaterial != null)
-        {
-            _originalMaterial = labyrinthRenderer.sharedMaterial;
-            _runtimeMaterial = new Material(_originalMaterial);
-            _runtimeMaterial.mainTexture = _workingTexture;
-            labyrinthRenderer.sharedMaterial = _runtimeMaterial;
-        }
-
-        return true;
-    }
-
-    Texture2D ExtractReadableTexture(Texture2D source)
-    {
-        RenderTexture rt = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.ARGB32);
-        Graphics.Blit(source, rt);
-
-        RenderTexture previous = RenderTexture.active;
-        RenderTexture.active = rt;
-
-        Texture2D readable = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false);
-        readable.ReadPixels(new Rect(0, 0, source.width, source.height), 0, 0);
-        readable.Apply(false, false);
-
-        RenderTexture.active = previous;
-        RenderTexture.ReleaseTemporary(rt);
-        return readable;
     }
 
     bool BuildGraphFromTexture()
     {
-        _gridWidth = Mathf.Max(2, _pixelWidth / Mathf.Max(1, sampleStride));
-        _gridHeight = Mathf.Max(2, _pixelHeight / Mathf.Max(1, sampleStride));
+        if (!TryBuildPassableGrid(out _passableGrid, out _))
+            return false;
 
-        bool[] passableGrid = new bool[_gridWidth * _gridHeight];
-        for (int gy = 0; gy < _gridHeight; gy++)
+        _gridToNode = new int[_passableGrid.Length];
+        for (int i = 0; i < _gridToNode.Length; i++)
+            _gridToNode[i] = -1;
+
+        var nodeXs = new List<int>(_passableGrid.Length / 2);
+        var nodeYs = new List<int>(_passableGrid.Length / 2);
+
+        for (int gy = 0; gy < gridHeight; gy++)
         {
-            for (int gx = 0; gx < _gridWidth; gx++)
+            for (int gx = 0; gx < gridWidth; gx++)
             {
-                int sx = Mathf.Clamp(gx * sampleStride + sampleStride / 2, 0, _pixelWidth - 1);
-                int sy = Mathf.Clamp(gy * sampleStride + sampleStride / 2, 0, _pixelHeight - 1);
-
-                Color32 c = _workingPixels[sy * _pixelWidth + sx];
-                float luma = (0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) / 255f;
-                passableGrid[gy * _gridWidth + gx] = luma >= wallThreshold;
-            }
-        }
-
-        int[] gridToNode = new int[passableGrid.Length];
-        for (int i = 0; i < gridToNode.Length; i++)
-            gridToNode[i] = -1;
-
-        var nodeXs = new List<int>(passableGrid.Length / 2);
-        var nodeYs = new List<int>(passableGrid.Length / 2);
-        _availableNodes = new List<int>(passableGrid.Length / 2);
-
-        for (int gy = 0; gy < _gridHeight; gy++)
-        {
-            for (int gx = 0; gx < _gridWidth; gx++)
-            {
-                int gi = gy * _gridWidth + gx;
-                if (!passableGrid[gi])
+                int gi = gy * gridWidth + gx;
+                if (!_passableGrid[gi])
                     continue;
 
                 int ni = nodeXs.Count;
-                gridToNode[gi] = ni;
+                _gridToNode[gi] = ni;
                 nodeXs.Add(gx);
                 nodeYs.Add(gy);
-                _availableNodes.Add(ni);
             }
         }
 
-        if (_availableNodes.Count < 2)
+        if (nodeXs.Count < 2)
             return false;
 
         _nodeToGridX = nodeXs.ToArray();
         _nodeToGridY = nodeYs.ToArray();
 
-        GraphEdge[][] adjacency = new GraphEdge[_availableNodes.Count][];
-        for (int n = 0; n < adjacency.Length; n++)
+        int nodeCount = nodeXs.Count;
+        int[] neighborOffsets = new int[nodeCount + 1];
+        for (int n = 0; n < nodeCount; n++)
         {
             int gx = _nodeToGridX[n];
             int gy = _nodeToGridY[n];
-
-            var edges = new List<GraphEdge>(4);
-            TryAddEdge(gx + 1, gy, gridToNode, edges);
-            TryAddEdge(gx - 1, gy, gridToNode, edges);
-            TryAddEdge(gx, gy + 1, gridToNode, edges);
-            TryAddEdge(gx, gy - 1, gridToNode, edges);
-            adjacency[n] = edges.ToArray();
+            neighborOffsets[n + 1] = neighborOffsets[n] + CountNeighbours(gx, gy, _gridToNode);
         }
 
-        _graph = new Graph(adjacency);
+        int[] neighbors = new int[neighborOffsets[nodeCount]];
+        for (int n = 0; n < nodeCount; n++)
+        {
+            int gx = _nodeToGridX[n];
+            int gy = _nodeToGridY[n];
+            int nextNeighbor = neighborOffsets[n];
+            TryAddNeighbour(gx + 1, gy, _gridToNode, neighbors, ref nextNeighbor);
+            TryAddNeighbour(gx - 1, gy, _gridToNode, neighbors, ref nextNeighbor);
+            TryAddNeighbour(gx, gy + 1, _gridToNode, neighbors, ref nextNeighbor);
+            TryAddNeighbour(gx, gy - 1, _gridToNode, neighbors, ref nextNeighbor);
+        }
+
+        _graph = new Graph(neighborOffsets, neighbors);
         return true;
     }
 
-    void TryAddEdge(int gx, int gy, int[] gridToNode, List<GraphEdge> edges)
+    int CountNeighbours(int gx, int gy, int[] gridToNode)
     {
-        if (gx < 0 || gy < 0 || gx >= _gridWidth || gy >= _gridHeight)
+        int count = 0;
+        if (gx + 1 < gridWidth && gridToNode[gy * gridWidth + gx + 1] >= 0)
+            count++;
+        if (gx > 0 && gridToNode[gy * gridWidth + gx - 1] >= 0)
+            count++;
+        if (gy + 1 < gridHeight && gridToNode[(gy + 1) * gridWidth + gx] >= 0)
+            count++;
+        if (gy > 0 && gridToNode[(gy - 1) * gridWidth + gx] >= 0)
+            count++;
+
+        return count;
+    }
+
+    void TryAddNeighbour(int gx, int gy, int[] gridToNode, int[] neighbors, ref int nextNeighbor)
+    {
+        if (gx < 0 || gy < 0 || gx >= gridWidth || gy >= gridHeight)
             return;
 
-        int node = gridToNode[gy * _gridWidth + gx];
+        int node = gridToNode[gy * gridWidth + gx];
         if (node >= 0)
-            edges.Add(new GraphEdge(node, 1f));
-    }
-
-    bool PickDeterministicStartGoal(out int startNode, out int goalNode)
-    {
-        startNode = FindFirstPassableNearBorder(left: true);
-        goalNode = FindFirstPassableNearBorder(left: false);
-
-        if (startNode >= 0 && goalNode >= 0 && startNode != goalNode)
-            return true;
-
-        if (_availableNodes.Count < 2)
-            return false;
-
-        startNode = _availableNodes[0];
-        goalNode = startNode;
-        int bestDist = -1;
-
-        for (int i = 1; i < _availableNodes.Count; i++)
-        {
-            int node = _availableNodes[i];
-            int dist = Manhattan(startNode, node);
-            if (dist > bestDist)
-            {
-                bestDist = dist;
-                goalNode = node;
-            }
-        }
-
-        return goalNode != startNode;
-    }
-
-    int FindFirstPassableNearBorder(bool left)
-    {
-        int startX = left ? 0 : _gridWidth - 1;
-        int dir = left ? 1 : -1;
-
-        for (int offset = 0; offset < _gridWidth; offset++)
-        {
-            int gx = startX + offset * dir;
-            if (gx < 0 || gx >= _gridWidth)
-                break;
-
-            for (int gy = 0; gy < _gridHeight; gy++)
-            {
-                int found = FindNodeByGrid(gx, gy);
-                if (found >= 0)
-                    return found;
-            }
-        }
-
-        return -1;
-    }
-
-    int FindNodeByGrid(int gx, int gy)
-    {
-        for (int i = 0; i < _nodeToGridX.Length; i++)
-        {
-            if (_nodeToGridX[i] == gx && _nodeToGridY[i] == gy)
-                return i;
-        }
-
-        return -1;
-    }
-
-    int Manhattan(int a, int b)
-    {
-        return Mathf.Abs(_nodeToGridX[a] - _nodeToGridX[b]) + Mathf.Abs(_nodeToGridY[a] - _nodeToGridY[b]);
+            neighbors[nextNeighbor++] = node;
     }
 
     void PaintNode(int node, Color color)
     {
-        int px = Mathf.Clamp(_nodeToGridX[node] * sampleStride + sampleStride / 2, 0, _pixelWidth - 1);
-        int py = Mathf.Clamp(_nodeToGridY[node] * sampleStride + sampleStride / 2, 0, _pixelHeight - 1);
-
-        Color32 c = color;
-        for (int dy = -paintRadiusPixels; dy <= paintRadiusPixels; dy++)
-        {
-            int y = py + dy;
-            if (y < 0 || y >= _pixelHeight)
-                continue;
-
-            for (int dx = -paintRadiusPixels; dx <= paintRadiusPixels; dx++)
-            {
-                int x = px + dx;
-                if (x < 0 || x >= _pixelWidth)
-                    continue;
-
-                _workingPixels[y * _pixelWidth + x] = c;
-            }
-        }
+        PaintGridCell(_nodeToGridX[node], _nodeToGridY[node], color);
     }
 
-    void ApplyPaint()
+    sealed class SearchBranchData
     {
-        _workingTexture.SetPixels32(_workingPixels);
-        _workingTexture.Apply(false, false);
+        public int node;
+    }
+    
+    void StopSearch()
+    {
+        Volatile.Write(ref _solved, 1);
+    }
+
+    void FinishAndReportNoPath()
+    {
+        Finish(hasSolution: false);
     }
 }

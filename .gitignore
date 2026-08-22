@@ -6,3 +6,9 @@ Logs/
 Temp/
 Packages/com.sebaslab.svelto.common/Svelto.Common.Tests~/bin~/
 Packages/com.sebaslab.svelto.common/Svelto.Common.Tests~/obj~/
+Packages/unity-mcp/
+.opencode/
+*.csproj
+*.sln
+*.csproj
+build/

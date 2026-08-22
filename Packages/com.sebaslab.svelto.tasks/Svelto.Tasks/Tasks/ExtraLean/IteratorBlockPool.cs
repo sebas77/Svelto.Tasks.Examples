@@ -39,6 +39,7 @@ namespace Svelto.Tasks.ExtraLean
     public class IteratorBlockPool<T> where T : class, new()
     {
         readonly Stack<(T data, PooledIteratorBlock<T> pooledIteratorBlock)> _pool = new Stack<(T data, PooledIteratorBlock<T> pooledIteratorBlock)>();
+        readonly object _lock = new object();
         readonly Func<T, IEnumerator> _iteratorBlock;
         internal readonly string name;
 
@@ -50,24 +51,29 @@ namespace Svelto.Tasks.ExtraLean
 
         public (T data, PooledIteratorBlock<T> pooledIteratorBlock) Get()
         {
-            if (_pool.Count == 0)
+            lock (_lock)
             {
-                var data = new T();
+                if (_pool.Count == 0)
+                {
+                    var data = new T();
 
-                Return(data, new PooledIteratorBlock<T>(_iteratorBlock(data), data, this));
+                    _pool.Push((data, new PooledIteratorBlock<T>(_iteratorBlock(data), data, this)));
+                }
+
+                return _pool.Pop();
             }
-
-            return _pool.Pop();
         }
 
         public void Return(T data, PooledIteratorBlock<T> pooledIteratorBlock)
         {
-            _pool.Push((data, pooledIteratorBlock));
+            lock (_lock)
+                _pool.Push((data, pooledIteratorBlock));
         }
         
         public void Dispose()
         {
-            _pool.Clear();
+            lock (_lock)
+                _pool.Clear();
         }
     }
 }

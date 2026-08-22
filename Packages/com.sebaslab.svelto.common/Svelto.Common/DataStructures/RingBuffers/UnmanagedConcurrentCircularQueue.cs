@@ -104,7 +104,7 @@ namespace Svelto.DataStructures
                 {
                     if (Interlocked.CompareExchange(ref tail.value, pos + 1, pos) == pos)
                     {
-                        CopyIntoCell(ref slot.cell, in value, size);
+                        CopyIntoCell(ref slot.cell, value, size);
                         Volatile.Write(ref slot.sequence, pos + 1);
                         return true;
                     }
@@ -190,10 +190,10 @@ namespace Svelto.DataStructures
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static void CopyIntoCell(ref TCell cell, in TCell value, int bytes)
+        static void CopyIntoCell(ref TCell cell, TCell value, int bytes)
         {
             ref byte dst0 = ref Unsafe.As<TCell, byte>(ref cell);
-            ref byte src0 = ref Unsafe.As<TCell, byte>(ref Unsafe.AsRef(in value));
+            ref byte src0 = ref Unsafe.As<TCell, byte>(ref value);
 
             Unsafe.CopyBlockUnaligned(ref dst0, ref src0, (uint)bytes);
         }

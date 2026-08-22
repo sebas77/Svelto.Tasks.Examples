@@ -1,14 +1,35 @@
-﻿using System;
+﻿using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
-using UnityEngine;
+using Unity.Mathematics;
 
 namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
 {
+    // Burst-compiled IJobParallelFor kernel. The math is written for optimal
+    // Burst codegen:
+    //  - all state is float3/float4 Unity.Mathematics: math.cross and the
+    //    quaternion rotation vectorize to SIMD instructions
+    //  - math.normalize uses rsqrt (one approximate reciprocal sqrt) instead of
+    //    the Vector3 sqrt-then-divide pair
+    //  - math.sincos evaluates sin AND cos with a single transcendental call;
+    //    the old code called Math.Sin and Math.Cos separately
+    //  - every intermediate is float32. The old code promoted several operations
+    //    to double precision (Math.Sqrt(1.0 - z*z), Math.Sin/Cos), which forces
+    //    scalar double-precision library calls in the hot loop and disables SIMD
+    //  - _time is a plain field copied in at Schedule() time: Burst cannot read
+    //    mutable static fields, and static readonly would be constant-folded at
+    //    compile time (freezing the particle rotation)
+    //  - _particleDataArr is [ReadOnly] (basePosition/rotationSpeed never
+    //    change), which gives the job scheduler maximum freedom; the original
+    //    wrote the identical struct back every iteration for no reason
+    [BurstCompile]
     struct ParticlesCPUKernel : IJobParallelFor
     {
-        public NativeArray<CPUParticleData> _particleDataArr;
-        public NativeArray<GPUParticleData> _gpuparticleDataArr;
+        [ReadOnly] public NativeArray<CPUParticleData> _particleDataArr;
+        // SoA: the job writes only the positions; the albedo lives in a
+        // separate static buffer never touched after init.
+        [WriteOnly] public NativeArray<float3> _gpuparticleDataArr;
+        public float _time;
 
         static uint Hash(uint s)
         {
@@ -26,106 +47,54 @@ namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
             return Hash(seed) / 4294967295.0f; // 2^32-1
         }
 
-        static void RandomUnitVector(uint seed, out Vector3 result)
+        static float3 RandomUnitVector(uint seed)
         {
-            /*  float PI2 = 6.28318530718;
-              float z = 1 - 2 * Random(seed);
-              float xy = sqrt(1.0 - z * z);
-              float sn, cs;
-              sincos(PI2 * Random(seed + 1), sn, cs);
-              return float3(sn * xy, cs * xy, z);*/
-            float PI2 = 6.28318530718f;
+            const float PI2 = 6.28318530718f;
             float z = 1.0f - 2.0f * Randomf(seed);
-            float xy = (float) Math.Sqrt(1.0 - z * z);
-            float sn, cs;
-            var value = PI2 * Randomf(seed + 1);
-            sn = (float) Math.Sin(value);
-            cs = (float) Math.Cos(value);
-            result.x = sn * xy;
-            result.y = cs * xy;
-            result.z = z;
+            float xy = math.sqrt(1.0f - z * z);
+            math.sincos(PI2 * Randomf(seed + 1), out float sn, out float cs);
+            return new float3(sn * xy, cs * xy, z);
         }
 
-        static void RandomVector(uint seed, out Vector3 result)
+        static float3 RandomVector(uint seed)
         {
-            //return RandomUnitVector(seed) * sqrt(Random(seed + 2));
-            RandomUnitVector(seed, out result);
-            var sqrt = (float) Math.Sqrt(Randomf(seed + 2));
-            result.x = result.x * sqrt;
-            result.y = result.y * sqrt;
-            result.z = result.z * sqrt;
+            //random unit vector scaled by sqrt(random)
+            return RandomUnitVector(seed) * math.sqrt(Randomf(seed + 2));
         }
 
-        static float quat_from_axis_angle(ref Vector3 axis, float angle, out Vector3 result)
+        static float4 quat_from_axis_angle(float3 axis, float angle)
         {
-            /*
-             float4 qr;
-        float half_angle = (angle * 0.5) * 3.14159 / 180.0;
-        qr.x = axis.x * sin(half_angle);
-        qr.y = axis.y * sin(half_angle);
-        qr.z = axis.z * sin(half_angle);
-        qr.w = cos(half_angle);
-        return qr;
-             */
             float half_angle = (angle * 0.5f) * 3.14159f / 180.0f;
-            var sin = (float) Math.Sin(half_angle);
-            result.x = axis.x * sin;
-            result.y = axis.y * sin;
-            result.z = axis.z * sin;
-            return (float) Math.Cos(half_angle);
+            math.sincos(half_angle, out float sin, out float cos);
+            //quaternion (xyz = axis * sin(half), w = cos(half))
+            return new float4(axis * sin, cos);
         }
 
-        static void Cross(ref Vector3 lhs, ref Vector3 rhs, out Vector3 result)
+        static float3 rotate_position(float3 position, float3 axis, float angle)
         {
-            result.x = lhs.y * rhs.z - lhs.z * rhs.y;
-            result.y = lhs.z * rhs.x - lhs.x * rhs.z;
-            result.z = lhs.x * rhs.y - lhs.y * rhs.x;
+            //v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v)
+            float4 q = quat_from_axis_angle(axis, angle);
+            float3 qxyz = q.xyz;
+
+            return position + 2.0f * math.cross(qxyz, math.cross(qxyz, position) + q.w * position);
         }
 
-        static void rotate_position(ref Vector3 position, ref Vector3 axis, float angle, out Vector3 result)
+        public ParticlesCPUKernel(NativeArray<CPUParticleData> particleData)
         {
-            /*
-                    float4 q = quat_from_axis_angle(axis, angle);
-                    float3 v = position.xyz;
-                    return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
-                    */
-            Vector3 q;
-            var w = quat_from_axis_angle(ref axis, angle, out q);
-            Cross(ref q, ref position, out result);
-            result.x = result.x + w * position.x;
-            result.y = result.y + w * position.y;
-            result.z = result.z + w * position.z;
-            Vector3 otherResult;
-            Cross(ref q, ref result, out otherResult);
-            result.x = position.x + 2.0f * otherResult.x;
-            result.y = position.y + 2.0f * otherResult.y;
-            result.z = position.z + 2.0f * otherResult.z;
-        }
-
-        public ParticlesCPUKernel(MillionPointsCPUUnityJobs t)
-        {
-            _particleDataArr = t._cpuParticleDataArr;
-            _gpuparticleDataArr = t._gpuparticleDataArr;
+            _particleDataArr = particleData;
+            _gpuparticleDataArr = default;
+            _time = 0;
         }
 
         public void Execute(int i)
         {
             var particle = _particleDataArr[i];
-            var gpuData = _gpuparticleDataArr[i];
-            
-            Vector3 randomVector;
-            RandomVector((uint) i + 1, out randomVector);
-            Cross(ref randomVector, ref particle.basePosition, out randomVector);
 
-            randomVector.Normalize();
-            
-            
-            rotate_position(ref particle.basePosition,
-                            ref randomVector, _particleDataArr[i].rotationSpeed * MillionPointsCPUUnityJobs.Time,
-                            out gpuData.position);
+            float3 randomVector = RandomVector((uint) i + 1);
+            randomVector = math.normalize(math.cross(randomVector, particle.basePosition));
 
-            _particleDataArr[i] = particle;
-            _gpuparticleDataArr[i] = gpuData;
+            _gpuparticleDataArr[i] = rotate_position(particle.basePosition, randomVector,
+                                                     particle.rotationSpeed * _time);
         }
     }
 }

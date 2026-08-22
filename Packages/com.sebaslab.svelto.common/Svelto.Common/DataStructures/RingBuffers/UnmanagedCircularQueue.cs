@@ -69,7 +69,7 @@ namespace Svelto.DataStructures
             int index = (int)(tail & mask);
             ref TCell slot = ref buffer[index];
             
-            CopyIntoCell(ref slot, in value, count);
+            CopyIntoCell(ref slot, value, count);
             
             tail++;
             return true;
@@ -114,10 +114,10 @@ namespace Svelto.DataStructures
         // --- Byte Copy Helpers ---
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static void CopyIntoCell(ref TCell cell, in TCell value, int bytes)
+        static void CopyIntoCell(ref TCell cell, TCell value, int bytes)
         {
             ref byte dst0 = ref Unsafe.As<TCell, byte>(ref cell);
-            ref byte src0 = ref Unsafe.As<TCell, byte>(ref Unsafe.AsRef(in value));
+            ref byte src0 = ref Unsafe.As<TCell, byte>(ref value);
 
             Unsafe.CopyBlockUnaligned(ref dst0, ref src0, (uint)bytes);
         }

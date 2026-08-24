@@ -30,7 +30,7 @@ namespace Svelto.Context
         }
 
         /// <summary>
-        /// A Context is meant to be deinitialized only once in its timelife
+        /// A Context is meant to be deinitialized only once in its lifetime
         /// </summary>
         public void NotifyFrameworkDeinitialized()
         {
@@ -45,7 +45,7 @@ namespace Svelto.Context
         }
 
         /// <summary>
-        /// A Context is meant to be initialized only once in its timelife
+        /// A Context is meant to be initialized only once in its lifetime
         /// </summary>
         public void NotifyFrameworkInitialized()
         {

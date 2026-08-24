@@ -320,11 +320,11 @@ namespace DBC.Tasks
 		/// <summary>
 		/// Is exception handling being used?
 		/// </summary>
-		private static bool UseExceptions => !useAssertions;
+		static bool UseExceptions => !useAssertions;
 
 		// Are trace assertion statements being used? 
 		// Default is to use exception handling.
-		private static bool useAssertions = false;
+		static bool useAssertions = false;
 
 		#endregion // Implementation
 

@@ -45,7 +45,7 @@ namespace Svelto.Tasks.Example.MillionPoints.ComputeShaders
             QualitySettings.vSyncCount = 0;
         }
 
-        void Start()
+        void OnEnable()
         {
             _gpuparticleDataArr = new GPUParticleData[_particleCount];
             
@@ -113,6 +113,12 @@ namespace Svelto.Tasks.Example.MillionPoints.ComputeShaders
             {
                 _GPUInstancingArgsBuffer.Release();
                 _GPUInstancingArgsBuffer = null;
+            }
+
+            if (_pointMesh != null)
+            {
+                Destroy(_pointMesh);
+                _pointMesh = null;
             }
         }
     }

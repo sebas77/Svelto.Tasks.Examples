@@ -51,7 +51,7 @@ namespace Svelto.Utilities
                     {
                         if (MAINTHREADID == currentManagedThreadId)
                         {
-                            //SetStacktrace can be called only in the editor and it's enable for LOG only in the editor
+                            //SetStacktrace can be called only in the editor and it's enabled for LOG only in the editor
                             var log = Application.GetStackTraceLogType(UnityEngine.LogType.Log);
                             Application.SetStackTraceLogType(UnityEngine.LogType.Log, StackTraceLogType.None);
 
@@ -69,7 +69,7 @@ namespace Svelto.Utilities
 #if UNITY_EDITOR
                         if (MAINTHREADID == currentManagedThreadId)
                         {
-                            //SetStacktrace can be called only in the editor and it's enable for LOG only in the editor
+                            //SetStacktrace can be called only in the editor and it's enabled for LOG only in the editor
                             var log = Application.GetStackTraceLogType(UnityEngine.LogType.Log);
                             Application.SetStackTraceLogType(UnityEngine.LogType.Log, StackTraceLogType.None);
 
@@ -86,7 +86,7 @@ namespace Svelto.Utilities
                     {
                         if (MAINTHREADID == currentManagedThreadId)
                         {
-                            //SetStacktrace can be called only in the editor and it's enable for LOG only in the editor
+                            //SetStacktrace can be called only in the editor and it's enabled for LOG only in the editor
                             var log = Application.GetStackTraceLogType(UnityEngine.LogType.Warning);
                             Application.SetStackTraceLogType(UnityEngine.LogType.Warning, StackTraceLogType.None);
 
@@ -104,7 +104,7 @@ namespace Svelto.Utilities
                     {
                         if (MAINTHREADID == currentManagedThreadId)
                         {
-                            //SetStacktrace can be called only in the editor and it's enable for LOG only in the editor
+                            //SetStacktrace can be called only in the editor and it's enabled for LOG only in the editor
                             var log = Application.GetStackTraceLogType(UnityEngine.LogType.Error);
                             Application.SetStackTraceLogType(UnityEngine.LogType.Error, StackTraceLogType.None);
 
@@ -129,7 +129,7 @@ namespace Svelto.Utilities
         {
             MAINTHREADID = Environment.CurrentManagedThreadId;
             //We want to keep the stack for not Svelto.Console log.
-            //SlowLogger will disable the stack for Svelto.Console log, as Svelto.Console has it's own stack generator
+            //SlowLogger will disable the stack for Svelto.Console log, as Svelto.Console has its own stack generator
             //If CatchEmAll is used, the external unity stack trace is passed instead
             Console.Log("-------------------->Svelto Default Unity Logger added");
         }

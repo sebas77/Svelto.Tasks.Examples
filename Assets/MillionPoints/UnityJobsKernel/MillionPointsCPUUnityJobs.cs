@@ -36,7 +36,7 @@ namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
             QualitySettings.vSyncCount = 0;
         }
 
-        void Start()
+        void OnEnable()
         {
             _cpuParticleDataArr = new NativeArray<CPUParticleData>(_particleCount, Allocator.Persistent);
 
@@ -115,7 +115,8 @@ namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
 
         void OnDisable()
         {
-            _cpuParticleDataArr.Dispose();
+            if (_cpuParticleDataArr.IsCreated)
+                _cpuParticleDataArr.Dispose();
 
             if (_particleDataBuffer != null)
             {
@@ -133,6 +134,12 @@ namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
             {
                 _GPUInstancingArgsBuffer.Release();
                 _GPUInstancingArgsBuffer = null;
+            }
+
+            if (_pointMesh != null)
+            {
+                Destroy(_pointMesh);
+                _pointMesh = null;
             }
         }
 

@@ -1,6 +1,6 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
-using NUnit.Framework;
 using Svelto.Tasks.Lean;
 
 namespace Svelto.Tasks.Tests
@@ -8,30 +8,24 @@ namespace Svelto.Tasks.Tests
     [TestFixture]
     public class ExtraLeanEnumeratorTests
     {
+        //ExtraLean tasks are plain IEnumerators, but a Lean task can yield them through
+        //an internal TaskContract constructor, which tests reach via reflection.
+        static TaskContract AsExtraLean(IEnumerator extraLeanEnumerator)
+        {
+            var ctor = typeof(TaskContract).GetConstructor(
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
+                null, new[] { typeof(IEnumerator) }, null);
+
+            return (TaskContract)ctor.Invoke(new object[] { extraLeanEnumerator });
+        }
+
         [Test]
         public void TestExtraLeanEnumerator_BreakAndStop_CompletesParentTask()
         {
-            // Parent task yields an ExtraLean enumerator (IEnumerator)
             IEnumerator<TaskContract> ParentTask()
             {
-                // Since TaskContract(IEnumerator) is internal, we cannot construct it directly.
-                // However, Svelto.Tasks supports yielding IEnumerator directly if the return type allows it?
-                // But here return type is IEnumerator<TaskContract>.
-                // The only way to return an IEnumerator from IEnumerator<TaskContract> is via TaskContract.
-                // If the constructor is internal, maybe there is a helper method?
-                // Or maybe I should use reflection to construct TaskContract?
-                // Or maybe I should use a LeanSveltoTask?
-                
-                // Let's use reflection to invoke the internal constructor.
-                // internal TaskContract(IEnumerator enumerator)
-                
-                var ctor = typeof(TaskContract).GetConstructor(
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
-                    null, new[] { typeof(IEnumerator) }, null);
-                
-                yield return (TaskContract)ctor.Invoke(new object[] { ExtraLeanBreakAndStop() });
-                
-                // This part should NOT be reached if Break.AndStop works
+                yield return AsExtraLean(ExtraLeanBreakAndStop());
+
                 Assert.Fail("Parent task continued after Break.AndStop");
             }
 
@@ -40,12 +34,15 @@ namespace Svelto.Tasks.Tests
                 yield return TaskContract.Break.AndStop;
             }
 
+            //the Assert.Fail above runs inside the task body: without this guard its
+            //exception would be swallowed by the runner and the test would silently pass
+            using (new FailOnSwallowedTaskExceptions())
             using (var runner = new SteppableRunner("ExtraLeanTest1"))
             {
                 ParentTask().RunOn(runner);
-                runner.Step(); // Start parent, get ExtraLean enumerator
-                runner.Step(); // Process ExtraLean enumerator -> Break.AndStop -> Parent completes
-                
+                runner.Step(); //start parent, spawn the ExtraLean enumerator
+                runner.Step(); //process it: Break.AndStop propagates and completes the parent
+
                 Assert.That(runner.hasTasks, Is.False);
             }
         }
@@ -57,11 +54,7 @@ namespace Svelto.Tasks.Tests
 
             IEnumerator<TaskContract> ParentTask()
             {
-                var ctor = typeof(TaskContract).GetConstructor(
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
-                    null, new[] { typeof(IEnumerator) }, null);
-
-                yield return (TaskContract)ctor.Invoke(new object[] { ExtraLeanBreakIt() });
+                yield return AsExtraLean(ExtraLeanBreakIt());
                 parentContinued = true;
             }
 
@@ -73,9 +66,9 @@ namespace Svelto.Tasks.Tests
             using (var runner = new SteppableRunner("ExtraLeanTest2"))
             {
                 ParentTask().RunOn(runner);
-                runner.Step(); // Start parent
-                runner.Step(); // Process ExtraLean -> Break.It -> Parent resumes
-                runner.Step(); // Parent continues and finishes
+                runner.Step(); //start parent
+                runner.Step(); //process the ExtraLean enumerator: Break.It stops only the child...
+                runner.Step(); //...and the parent resumes and finishes
 
                 Assert.That(parentContinued, Is.True);
                 Assert.That(runner.hasTasks, Is.False);
@@ -83,64 +76,46 @@ namespace Svelto.Tasks.Tests
         }
 
         [Test]
-        public void TestExtraLeanEnumerator_InvalidReturn_ThrowsException()
+        public void TestExtraLeanEnumerator_InvalidReturn_FaultsTheTaskWithSveltoTaskException()
         {
             IEnumerator<TaskContract> ParentTask()
             {
-                var ctor = typeof(TaskContract).GetConstructor(
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
-                    null, new[] { typeof(IEnumerator) }, null);
-
-                yield return (TaskContract)ctor.Invoke(new object[] { ExtraLeanInvalid() });
+                yield return AsExtraLean(ExtraLeanInvalid());
             }
 
             IEnumerator ExtraLeanInvalid()
             {
-                yield return 123; // Invalid return value for ExtraLean
+                yield return 123; //plain values are not valid yields for ExtraLean tasks
+            }
+
+            Exception caughtException = null;
+
+            void OnException(Exception e, string msg)
+            {
+                caughtException = e;
             }
 
             using (var runner = new SteppableRunner("ExtraLeanTest3"))
             {
                 ParentTask().RunOn(runner);
-                runner.Step(); // Start parent
 
-                // The exception is caught inside SveltoTaskWrapper and rethrown?
-                // Or maybe it's swallowed?
-                // In SveltoTaskWrapper.cs:
-                // catch (Exception e) { Console.LogException(e); throw; }
-                // So it rethrows.
-                // But SteppableRunner.Step() catches exceptions?
-                // SteppableRunner.Step() calls _processor.MoveNext().
-                // _processor.MoveNext() catches exceptions?
-                // In SveltoTaskRunner.cs:
-                // catch (Exception e) { Console.LogException(e, ...); result = StepState.Faulted; }
-                // So it catches and returns Faulted.
-                // It does NOT throw.
-                // So Assert.Throws fails.
-                // I should check if the task faulted?
-                // But SteppableRunner.Step() returns bool (true if running, false if done).
-                // It doesn't return StepState.
-                // So I cannot check StepState directly.
-                // But if it faults, it logs exception.
-                // And the task is removed.
-                // So runner.hasTasks should be false?
-                // But I want to verify the exception.
-                // SteppableRunner doesn't expose exceptions.
-                // But TaskCollection has onException event.
-                // SteppableRunner uses SveltoTaskRunner.
-                // SveltoTaskRunner doesn't seem to expose exceptions easily.
-                // Wait, GenericSteppableRunner has no onException event.
-                // But the test expects SveltoTaskException.
-                // If I cannot catch it, I cannot verify it easily.
-                // Unless I use a custom runner or flow modifier?
-                // Or maybe I can check console logs? (Not easy in unit test).
-                // However, the TODO says "todo unit test this".
-                // It implies verifying the logic.
-                // If the logic throws, and runner catches it, the behavior is "Task Faulted".
-                // So I should verify the task is faulted/stopped.
-                
-                runner.Step();
-                Assert.That(runner.hasTasks, Is.False);
+                //runners do not rethrow task exceptions: they log them through Console.onException,
+                //mark the task Faulted and remove it
+                Console.onException += OnException;
+
+                try
+                {
+                    runner.Step();
+                    runner.Step();
+                }
+                finally
+                {
+                    Console.onException -= OnException;
+                }
+
+                Assert.That(caughtException, Is.Not.Null, "no exception was reported for the invalid yield");
+                Assert.That(caughtException.GetType().Name, Is.EqualTo("SveltoTaskException"));
+                Assert.That(runner.hasTasks, Is.False, "the faulted task must be removed from the runner");
             }
         }
     }

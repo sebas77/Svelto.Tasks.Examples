@@ -15,7 +15,7 @@ namespace Svelto.Common
 
         readonly string _info;
         
-        //It doesn't make any sense to profile with two different patterns, either it's trough the main struct
+        //It doesn't make any sense to profile with two different patterns, either it's through the main struct
         //or through the Sample method. If both are provided, Sample is basically never used.
         public StandardProfiler(string info)
         {

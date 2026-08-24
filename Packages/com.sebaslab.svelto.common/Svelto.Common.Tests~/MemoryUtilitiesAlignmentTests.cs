@@ -1,7 +1,4 @@
-﻿using NUnit.Framework;
-using Svelto.Utilities;
-
-namespace Svelto.Common.Tests
+﻿namespace Svelto.Common.Tests
 {
     [TestFixture]
     public class MemoryUtilitiesAlignmentTests

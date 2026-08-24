@@ -45,7 +45,7 @@ namespace Svelto.Utilities
         //it hints the scheduler to check if there's another thread ready to run.
         //If none, the current thread continues execution. It's like saying, “Hey, anyone else need the CPU?
         //No? Okay, I'll keep going.” Useful for giving other threads a chance to execute without pausing the
-        //current thread's execution. Have you been working on threading issues?
+        //current thread's execution.
         //Sleep(1) instead definitely causes a context switch.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Relax()
@@ -69,7 +69,7 @@ namespace Svelto.Utilities
         /// of the expected scenarios. I don't do Sleep(0) because it can still
         /// cause a context switch;
         /// </summary>
-        /// <param name="quickIterations">will be increment by 1</param>
+        /// <param name="quickIterations">will be incremented by 1</param>
         /// <param name="powerOf2Frequency">must be power of 2</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Wait(ref int quickIterations, int powerOf2Frequency = 256)

@@ -369,7 +369,6 @@ namespace Svelto.Tasks.Tests
 
             Assert.That(disposableTask.disposed, Is.True);
         }
-
     }
 }
 

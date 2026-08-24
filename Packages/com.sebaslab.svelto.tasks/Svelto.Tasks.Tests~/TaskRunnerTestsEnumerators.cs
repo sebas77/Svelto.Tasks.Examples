@@ -298,9 +298,14 @@ namespace Svelto.Tasks.Tests
         /// </summary>
         /// <returns></returns>
         [Test]
-        public void TestFancyEnumerator() 
+        public void TestFancyEnumerator()
         {
-            ComplexEnumerator((i) => Assert.That(i, Is.EqualTo(100))).Complete(1000); //ms
+            //the assertion runs inside a task body: without this guard a failure would be
+            //swallowed by the runner and the test would silently pass
+            using (new FailOnSwallowedTaskExceptions())
+            {
+                ComplexEnumerator((i) => Assert.That(i, Is.EqualTo(100))).Complete(1000); //ms
+            }
         }
 
         /// <summary>
@@ -310,9 +315,12 @@ namespace Svelto.Tasks.Tests
         [Test]
         public void TestEvenFancierEnumerator()
         {
-            var multiThreadRunner = new MultiThreadRunner("test");
-            MoreComplexEnumerator((i) => Assert.That(i, Is.EqualTo(20)), multiThreadRunner).Complete(1000); //ms
-            multiThreadRunner.Dispose();
+            using (new FailOnSwallowedTaskExceptions())
+            {
+                var multiThreadRunner = new MultiThreadRunner("test");
+                MoreComplexEnumerator((i) => Assert.That(i, Is.EqualTo(20)), multiThreadRunner).Complete(1000); //ms
+                multiThreadRunner.Dispose();
+            }
         }
 
         /// <summary>
@@ -327,33 +335,47 @@ namespace Svelto.Tasks.Tests
             //you would normally write GameLoop().Run() to run on the standard scheduler, which changes
             //according the platform (on Unity the standard scheduler is the CoroutineMonoRunner, which
             //cannot run during these tests)
-            GameLoop().Complete(1000); //ms
+            //GameLoop waits twice on a reusable WaitForSecondsEnumerator through a continuation: those
+            //waits are executed by the runner, so completing the loop must really take two seconds.
+            var watch = new System.Diagnostics.Stopwatch();
+            watch.Start();
 
-            Assert.Pass();
+            GameLoop().Complete(5000); //ms
+
+            Assert.That(watch.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(2000),
+                "the WaitForSecondsEnumerator waits were not actually processed");
         }
 
 
         [Test]
         public void RunSeparateCoroutinesInParallelAndWaitForThem()
         {
-            SyncRunner runner = new SyncRunner("test");
-            
-            IEnumerator<TaskContract> InitCompose()
+            using (var runner = new SyncRunner("test"))
             {
-                var smartFunctionEnumerator = new SmartFunctionEnumerator<int>(ExitTest, 0);
+                bool composeCompleted = false;
 
-                var wait1 = smartFunctionEnumerator.RunOn(runner);
-                var wait2 = smartFunctionEnumerator.RunOn(runner);
-                var wait3 = smartFunctionEnumerator.RunOn(runner);
-                var wait4 = smartFunctionEnumerator.RunOn(runner);
+                IEnumerator<TaskContract> InitCompose()
+                {
+                    var smartFunctionEnumerator = new SmartFunctionEnumerator<int>(ExitTest, 0);
 
-                while (wait1.isRunning == true || wait2.isRunning == true || wait3.isRunning == true
-                 || wait4.isRunning == true)
-                    yield return TaskContract.Yield.It;
+                    var wait1 = smartFunctionEnumerator.RunOn(runner);
+                    var wait2 = smartFunctionEnumerator.RunOn(runner);
+                    var wait3 = smartFunctionEnumerator.RunOn(runner);
+                    var wait4 = smartFunctionEnumerator.RunOn(runner);
+
+                    while (wait1.isRunning == true || wait2.isRunning == true || wait3.isRunning == true
+                     || wait4.isRunning == true)
+                        yield return TaskContract.Yield.It;
+
+                    composeCompleted = true;
+                }
+
+                var task = InitCompose().RunOn(runner);
+
+                Assert.That(runner.WaitForTasksDoneRelaxed(1000), Is.True, "the tasks did not complete within the deadline");
+                Assert.That(composeCompleted, Is.True, "the waiting task never observed its continuations completing");
+                Assert.That(task.isRunning, Is.False, "the waiting task is still running after the continuations completed");
             }
-
-            InitCompose().RunOn(runner);
-            runner.WaitForTasksDoneRelaxed(1000); //ms
         }
 
         [Test]
@@ -440,6 +462,9 @@ namespace Svelto.Tasks.Tests
         [Test]
         public void TestEnumeratorContinuingEnumeratorReturningValue()
         {
+            //the assertion on the returned value runs inside the task body: without this guard
+            //a failure would be swallowed by the runner and the test would silently pass
+            using (new FailOnSwallowedTaskExceptions())
             using (var runner = new MultiThreadRunner("test"))
             {
                 NestedEnumerator().RunOn(runner);
@@ -460,7 +485,7 @@ namespace Svelto.Tasks.Tests
             yield return 10;
         }
 
-        static IEnumerator GameLoop()
+        static IEnumerator<TaskContract> GameLoop()
         {
             //initialization phase, for example you can precreate reusable enumerators or taskroutines
             //to avoid runtime allocations

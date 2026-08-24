@@ -1,5 +1,4 @@
 using System;
-using Svelto.Common.Internal;
 
 namespace Svelto.Common
 {

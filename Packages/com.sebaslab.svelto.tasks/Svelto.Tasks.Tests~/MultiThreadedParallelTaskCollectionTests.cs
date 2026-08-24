@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Threading;
-using NUnit.Framework;
 using Svelto.Tasks.Parallelism;
 
 namespace Svelto.Tasks.Tests

@@ -28,6 +28,7 @@
       "source": "embedded",
       "dependencies": {
         "com.sebaslab.svelto.common": "3.6.0",
+        "com.unity.profiling.core": "1.0.3",
         "org.nuget.system.runtime.compilerservices.unsafe": "6.0.0"
       }
     },
@@ -83,6 +84,13 @@
     "com.unity.nuget.newtonsoft-json": {
       "version": "3.2.2",
       "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.profiling.core": {
+      "version": "1.0.3",
+      "depth": 0,
       "source": "registry",
       "dependencies": {},
       "url": "https://packages.unity.com"

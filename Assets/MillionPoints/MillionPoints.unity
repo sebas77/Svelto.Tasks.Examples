@@ -838,6 +838,7 @@ GameObject:
   - component: {fileID: 1741070213}
   - component: {fileID: 1741070212}
   - component: {fileID: 1741070214}
+  - component: {fileID: 1741070215}
   m_Layer: 0
   m_Name: MillionPoints
   m_TagString: Untagged
@@ -954,6 +955,25 @@ MonoBehaviour:
   _material: {fileID: 2100000, guid: 6c4b06b85eebc4e4da80676c59928354, type: 2}
   _BoundCenter: {x: 0, y: 0, z: 0}
   _BoundSize: {x: 300, y: 300, z: 300}
+--- !u!114 &1741070215
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1741070207}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 617b7afdce142a44b8eb227ac7a6a7ef, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RuntimeImplementationSelector
+  implementations:
+  - {fileID: 1741070208}
+  - {fileID: 1741070211}
+  - {fileID: 1741070213}
+  - {fileID: 1741070212}
+  - {fileID: 1741070214}
+  title: MillionPoints implementation
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

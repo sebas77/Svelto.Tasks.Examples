@@ -1,6 +1,6 @@
 namespace Svelto.Tasks.Internal
 {
-    //Note: SerialFlow was once existing. However it was removed because it needed way to much code trickery to work
+    //Note: SerialFlow was once existing. However it was removed because it needed way too much code trickery to work
     //The best way to achieve serial execution is anyway to use SerialTaskCollection. 
     
     public interface IFlowModifier

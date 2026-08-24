@@ -1,5 +1,7 @@
 # Svelto.Common - AI Developer Guide
 
+> **Note:** `AGENTS.md` (repo root) distills the essentials of this guide. When details conflict, this file is authoritative — update it first, then mirror into AGENTS.md.
+
 > **Purpose:** A shared utility library used across all Svelto frameworks (ECS, Tasks, etc.). Provides high-performance data structures, memory management, logging, object pooling, profiling, and platform abstractions. Designed to work in both Unity (with Burst/Jobs) and plain .NET.
 
 ## Architecture Overview

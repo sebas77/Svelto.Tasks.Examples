@@ -3,7 +3,7 @@
 namespace Svelto.Tasks.FlowModifiers
 {
     /// <summary>
-    /// SerialFlow guarantees that the task running run in serial, but the order of execution is not guaranteed
+    /// SerialFlow guarantees that the tasks run in serial, but the order of execution is not guaranteed
     /// (they won't run in the order they are added in the runner).
     /// Note: if you use serial flow, a root task cannot wait for another root task, so you cannot ever yield
     /// for another root task doing something like

@@ -2,7 +2,7 @@ using System.Threading;
 
 namespace Svelto.Tasks
 {
-        internal struct SveltoTaskState
+    struct SveltoTaskState
         {
             byte _value;
 

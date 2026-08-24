@@ -1,6 +1,4 @@
 ﻿#if NEW_C_SHARP || !UNITY_5_3_OR_NEWER
-using NUnit.Framework;
-
 namespace Svelto.Common.Tests
 {
     [TestFixture]

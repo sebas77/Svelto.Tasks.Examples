@@ -1,6 +1,4 @@
-﻿using NUnit.Framework;
-using Svelto.Common;
-using Svelto.DataStructures;
+﻿using Svelto.DataStructures;
 
 namespace Svelto.Common.Tests
 {

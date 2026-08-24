@@ -83,7 +83,7 @@ namespace Svelto.DataStructures
                                    , (uint) restCount);
                 }
 
-                //this is may seems a waste if you are going to use an unsafeBlob just for bytes, but it's necessary for mixed types.
+                //this may seem a waste if you are going to use an unsafeBlob just for bytes, but it's necessary for mixed types.
                 //it's still possible to use WriteUnaligned though
                 uint paddedStructSize = (uint) (structSize + (int) MemoryUtilities.Pad4(structSize));
 
@@ -92,7 +92,7 @@ namespace Svelto.DataStructures
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        //The index returned is the index of the unwrapped ring. It must be wrapped again before to be used
+        //The index returned is the index of the unwrapped ring. It must be wrapped again before being used
         internal ref T Reserve<T>(out UnsafeArrayIndex index) where T : struct //should be unmanaged, but it's not due to Svelto.ECS constraints.
         {
             unsafe
@@ -155,7 +155,7 @@ namespace Svelto.DataStructures
                 if (_readIndex == _writeIndex)
                 {
                     //resetting the Indices has the benefit to let the Reserve work in more occasions and
-                    //the rapping happening less often. If the _readIndex reached the _writeIndex, it means
+                    //the wrapping happening less often. If the _readIndex reached the _writeIndex, it means
                     //that there is no data left to read, so we can start to write again from the begin of the memory
                     _writeIndex = 0;
                     _readIndex  = 0;
@@ -212,7 +212,7 @@ namespace Svelto.DataStructures
                     {
                         var newReaderHead = _readIndex % newCapacity;
                         
-                        //Note: I use CopyBloc here because the memory is always aliogned thanks to MemoryUtilities.Pad4
+                        //Note: I use CopyBlock here because the memory is always aligned thanks to MemoryUtilities.Pad4
                         Unsafe.CopyBlock(newPointer + newReaderHead, ptr + oldReaderHead, (uint) currentSize);
                     }
                     else
@@ -230,9 +230,9 @@ namespace Svelto.DataStructures
 #endif                  
                         //I am leaving on purpose gap at the begin of the new array if there is any, it will be 
                         //anyway used once it's time to wrap. 
-                        //Note: I use CopyBloc here because the memory is always aliogned thanks to MemoryUtilities.Pad4
+                        //Note: I use CopyBlock here because the memory is always aligned thanks to MemoryUtilities.Pad4
                         Unsafe.CopyBlock(newPointer + newReaderHead, ptr + oldReaderHead, byteCountToEnd); //from the old reader head to the end of the old array
-                        Unsafe.CopyBlock(newPointer + newReaderHead + byteCountToEnd, ptr + 0, (uint) oldWriterHead); //from the begin of the old array to the old writer head (rember the writerHead wrapped)
+                        Unsafe.CopyBlock(newPointer + newReaderHead + byteCountToEnd, ptr + 0, (uint) oldWriterHead); //from the begin of the old array to the old writer head (remember the writerHead wrapped)
                     }
                 }
 

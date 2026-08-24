@@ -7,7 +7,7 @@ using Svelto.Tasks.Internal;
 namespace Svelto.Tasks
 {
     /// <summary>
-    /// Remember, unless you are using the StandardSchedulers, nothing hold your runners. Be careful that if you
+    /// Remember, unless you are using the StandardSchedulers, nothing holds your runners. Be careful that if you
     /// don't hold a reference, they will be garbage collected even if tasks are still running
     /// </summary>
     public class GenericSteppableRunner<TTask> : ISteppableRunner, IRunner<TTask> where TTask : ISveltoTask

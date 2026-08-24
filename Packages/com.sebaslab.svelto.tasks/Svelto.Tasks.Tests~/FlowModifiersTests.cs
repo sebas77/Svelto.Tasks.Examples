@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Threading;
+using NUnit.Framework;
 using Svelto.Tasks.FlowModifiers;
 using Svelto.Tasks.Lean;
 
@@ -49,68 +50,62 @@ namespace Svelto.Tasks.Tests
         }
 
         [Test]
-        public void StaggeredFlow_LimitsTasksPerIteration()
+        public void StaggeredFlow_LimitsTasksPerTick_AndStarvesExcessTasks()
         {
             using (var runner = new SteppableRunner("StaggeredFlow"))
             {
-                runner.UseFlowModifier(new StaggeredFlow(2)); // Max 2 tasks per step
+                runner.UseFlowModifier(new StaggeredFlow(2)); //max 2 tasks processed per Step()
 
-                int executedCount = 0;
-                IEnumerator<TaskContract> Task()
+                var started  = new List<int>();
+                var finished = new List<int>();
+
+                IEnumerator<TaskContract> Task(int id)
                 {
-                    executedCount++;
+                    started.Add(id); //first execution
                     yield return TaskContract.Yield.It;
+                    finished.Add(id); //second and last execution
                 }
 
-                // Add 3 tasks
-                Task().RunOn(runner);
-                Task().RunOn(runner);
-                Task().RunOn(runner);
+                Task(1).RunOn(runner);
+                Task(2).RunOn(runner);
+                Task(3).RunOn(runner);
 
+                //Step 1: only the first two tasks are processed, task 3 doesn't run at all
                 runner.Step();
-                // Should execute 2 tasks
-                Assert.That(executedCount, Is.EqualTo(2));
+                Assert.That(started, Is.EqualTo(new[] { 1, 2 }),
+                    "no more than maxTasksPerIteration tasks can be processed per tick");
 
+                //Step 2: exactly two more executions happen (one of them is task 3 finally
+                //getting its turn, because completing task 1 freed a budget slot through the
+                //swap-removal). Assert counts, not identities: the runner shuffles the queue
+                //when tasks are removed
+                int executionsAfterStep1 = started.Count + finished.Count;
                 runner.Step();
-                // Should execute the first 2 tasks again (starvation of the 3rd task)
-                // Wait, StaggeredFlow logic:
-                // Iteration 1: Task 1 runs (iter=1), Task 2 runs (iter=2). Max reached. Task 3 doesn't run.
-                // Iteration 2: Task 1 runs (iter=1), Task 2 runs (iter=2). Max reached. Task 3 doesn't run.
-                // So executedCount should be 2 + 2 = 4.
-                // But the test failed with "Expected: 2, But was: 3".
-                // This means in the FIRST step, it executed 3 tasks.
-                // My fix to StaggeredFlow changed logic to >= max.
-                // If max is 2.
-                // Task 1: iter=0. 0 >= 2 false. iter=1. True.
-                // Task 2: iter=1. 1 >= 2 false. iter=2. True.
-                // Task 3: iter=2. 2 >= 2 true. iter=0. False.
-                // So it runs 2 tasks.
-                // Why did it fail with 3?
-                // Maybe because I didn't recompile properly or something?
-                // Or maybe the runner logic is different.
-                // Let's look at SveltoTaskRunner.Process.MoveNext.
-                // It iterates _runningCoroutines.
-                // CanProcessThis is called.
-                // If CanProcessThis returns false, it breaks the loop.
-                // StaggeredFlow.CanMoveNext is called inside CanProcessThis? No.
-                // CanProcessThis is called at the start of the loop.
-                // StaggeredFlow.CanProcessThis returns true always.
-                // Wait, StaggeredFlow implements IFlowModifier.
-                // Let's check IFlowModifier interface.
+                Assert.That(started.Count + finished.Count, Is.EqualTo(executionsAfterStep1 + 2),
+                    "starved tasks must not get extra budget beyond maxTasksPerIteration");
+
+                //whatever remains completes within the same per-tick limit...
+                while (runner.hasTasks)
+                    runner.Step();
+
+                //...and nobody was dropped
+                Assert.That(started, Is.EquivalentTo(new[] { 1, 2, 3 }));
+                Assert.That(finished, Is.EquivalentTo(new[] { 1, 2, 3 }));
             }
         }
 
         [Test]
-        public void TimeBoundFlow_BoundsWorkPerStep()
+        public void TimeBoundFlow_BoundsWorkPerTick_ButDoesNotDropDeferredTasks()
         {
             using (var runner = new SteppableRunner("TimeBoundFlow"))
             {
-                runner.UseFlowModifier(new TimeBoundFlow(20f)); // 20ms budget
+                runner.UseFlowModifier(new TimeBoundFlow(20f)); //20ms budget per Step()
 
                 int counter = 0;
+
                 IEnumerator<TaskContract> SmallTask()
                 {
-                    Thread.Sleep(5); // 5ms
+                    Thread.Sleep(5); //5ms of work
                     counter++;
                     yield return TaskContract.Yield.It;
                 }
@@ -118,37 +113,64 @@ namespace Svelto.Tasks.Tests
                 for (int i = 0; i < 10; i++)
                     SmallTask().RunOn(runner);
 
+                //a single tick cannot process all the tasks within the budget
                 runner.Step();
-                
-                // Should run about 4 tasks (20ms / 5ms)
-                Assert.That(counter, Is.GreaterThan(0));
-                Assert.That(counter, Is.LessThan(10));
+                Assert.That(counter, Is.GreaterThan(0), "the budget was never used");
+                Assert.That(counter, Is.LessThan(10), "the budget was not enforced");
+
+                //tasks that didn't fit in the budget are deferred, not dropped: each tick restarts
+                //from the first task, so as soon as earlier tasks complete their slots free up and
+                //the deferred ones get processed
+                while (runner.hasTasks)
+                    runner.Step();
+
+                Assert.That(counter, Is.EqualTo(10), "deferred tasks must all eventually run");
             }
         }
 
+        /// <summary>
+        /// The feature distinguishing TimeSlicedFlow from TimeBoundFlow: when the end of the task
+        /// list is reached while there is still time left in the slice, the iteration wraps back to
+        /// the first task instead of ending the tick. Tasks are therefore revisited several times
+        /// within a single Step(), which is impossible with any other flow modifier.
+        /// </summary>
         [Test]
-        public void TimeSlicedFlow_RunsTasksUntilTimeLimit()
+        public void TimeSlicedFlow_RevisitsAllTasksWithinASingleStep()
         {
-             using (var runner = new SteppableRunner("TimeSlicedFlow"))
+            using (var runner = new SteppableRunner("TimeSlicedFlow"))
             {
-                runner.UseFlowModifier(new TimeSlicedFlow(20f)); // 20ms budget
+                runner.UseFlowModifier(new TimeSlicedFlow(100f)); //100ms slice
 
-                int counter = 0;
-                IEnumerator<TaskContract> SmallTask()
+                const int loopsPerTask = 5;
+                int[] visits = new int[3];
+
+                IEnumerator<TaskContract> SmallTask(int id)
                 {
-                    Thread.Sleep(5); // 5ms
-                    counter++;
-                    yield return TaskContract.Yield.It;
+                    for (int i = 0; i < loopsPerTask; i++)
+                    {
+                        visits[id]++; //counts one body execution per visit
+                        yield return TaskContract.Yield.It;
+                    }
                 }
 
-                for (int i = 0; i < 10; i++)
-                    SmallTask().RunOn(runner);
+                for (int i = 0; i < visits.Length; i++)
+                    SmallTask(i).RunOn(runner);
 
+                //a single tick: without wrapping it would perform exactly one pass (3 visits total,
+                //one per pending task) and end the tick
                 runner.Step();
-                
-                // Should run about 4 tasks (20ms / 5ms)
-                Assert.That(counter, Is.GreaterThan(0));
-                Assert.That(counter, Is.LessThan(10));
+
+                int totalVisits = visits[0] + visits[1] + visits[2];
+                Assert.That(totalVisits, Is.GreaterThan(visits.Length),
+                    "the iteration must wrap around and revisit tasks within the same tick");
+
+                //the wrapped ticks keep cycling until every task completed its loop
+                while (runner.hasTasks)
+                    runner.Step();
+
+                for (int i = 0; i < visits.Length; i++)
+                    Assert.That(visits[i], Is.EqualTo(loopsPerTask),
+                        $"task {i} was revisited but never dropped or duplicated");
             }
         }
     }

@@ -35,14 +35,18 @@ namespace Svelto.Tasks.Tests
         }
         
         [Test]
-        public void TestThatABreakItBreaksTheCurrentExecution()
+        public void TestThatABreakItBreaksTheCurrentTaskButLetsTheCallerContinue()
         {
-            var severalTasksParent = SeveralTasksBreakIt();
+            //the distinguishing Break.It semantic: the broken task stops, but the task
+            //that was waiting for it keeps running (unlike Break.AndStop)
+            var severalTasksParent = SeveralTasksParentBreakIt();
             severalTasksParent.Complete(1000); //ms
 
+            //the child broke itself right after _iterable1, skipping _iterable2...
             Assert.That(_iterable1.AllRight, Is.True);
             Assert.That(_iterable2.AllRight, Is.False);
-            Assert.That(severalTasksParent.Current.ToInt(), Is.Not.EqualTo(10));
+            //...but the caller resumed and completed with its return value
+            Assert.That(severalTasksParent.Current.ToInt(), Is.EqualTo(10));
         }
 
         [TearDown]
@@ -86,6 +90,13 @@ namespace Svelto.Tasks.Tests
             yield return _iterable2.Continue();
         }
         
+        IEnumerator<TaskContract> SeveralTasksParentBreakIt()
+        {
+            yield return SeveralTasksBreakIt().Continue();
+
+            yield return 10;
+        }
+
         IEnumerator<TaskContract> SeveralTasksBreakIt()
         {
             yield return _iterable1.Continue();

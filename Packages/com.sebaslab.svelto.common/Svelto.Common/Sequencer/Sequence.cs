@@ -38,7 +38,7 @@ namespace Svelto.Common
     }
 
     /// <summary>
-    /// The sequencer relies on the attribute SequenceAttribute to allow class to stay internal in their own
+    /// The sequencer relies on the attribute SequenceAttribute to allow classes to stay internal in their own
     /// assemblies.
     /// </summary>
     /// <typeparam name="T"></typeparam>

@@ -112,8 +112,8 @@ namespace Svelto.DataStructures
 
         /// <summary>
         /// Note: the NativeStrategy implementations always hold a pre-boxed version of the buffer, so boxing
-        /// never happens at run time. Unboxing does happen at runtime, but it's very cheap and never incur in
-        /// allocations 
+        /// never happens at run time. Unboxing does happen at runtime, but it's very cheap and never incurs
+        /// allocations
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

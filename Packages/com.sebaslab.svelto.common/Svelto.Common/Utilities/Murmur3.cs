@@ -6,7 +6,7 @@ namespace Svelto.Utilities
     /// <summary>
     /// Murmur hash.
     ///
-    /// Creates an evenly destributed uint hash from a byte[].
+    /// Creates an evenly distributed uint hash from a byte[].
     /// Very fast and fairly unique
     /// </summary>
     public static class Murmur3

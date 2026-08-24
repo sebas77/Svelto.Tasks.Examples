@@ -20,7 +20,7 @@ namespace Svelto.DataStructures
 //
 // Operations are O(1) and non-blocking; readiness is tracked per slot via a PublishedIndex marker.
 // Publication order is "write Value, then Volatile.Write(PublishedIndex)" so the consumer won’t
-// observe an index as present before its value is visible (release/acquire pattern). [web:184][web:98]
+// observe an index as present before its value is visible (release/acquire pattern).
 
     public enum MonotonicSlotState 
     {
@@ -129,9 +129,9 @@ namespace Svelto.DataStructures
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        /// summary
+        /// <summary>
         /// Consumer-only. Try get value at index if (and only if) published. Does not retire.
-        /// 
+        ///
         public MonotonicSlotState TryGet(int index, out T value)
         {
             if (index < 0)

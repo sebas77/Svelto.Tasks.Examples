@@ -54,9 +54,10 @@ namespace Svelto.DataStructures
     }
 
     /// <summary>
-    /// A list that allows for O(1) removal by leaving a tombstone in the removed slot.
-    /// The removed slots are reused for future additions.
-    /// I needed this data structures to keep stable buffer indices of existing items while allowing removals 
+    /// Stores items in stable slots, allowing O(1) removal without moving the remaining items.
+    /// Removed slots become tombstones and are reused by later additions, so existing <see cref="TombstoneHandle"/>
+    /// values stay valid until their corresponding items are removed. Use this when callers need to retain handles
+    /// across additions and removals; use a compact list instead when contiguous ordering is required.
     /// </summary>
     /// <typeparam name="T"></typeparam>
     public class TombstoneList<T>

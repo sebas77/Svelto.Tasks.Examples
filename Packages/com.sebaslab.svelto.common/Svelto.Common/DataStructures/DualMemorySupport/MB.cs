@@ -8,7 +8,7 @@ namespace Svelto.DataStructures
     /// <summary>
     /// MB stands for ManagedBuffer
     ///
-    /// MBs are note meant to be resized or freed. They are wrappers of constant size arrays.
+    /// MBs are not meant to be resized or freed. They are wrappers of constant size arrays.
     /// MBs always wrap external arrays, they are not meant to allocate memory by themselves.
     ///
     /// MB are wrappers of arrays. Are not meant to resize or free
@@ -17,7 +17,7 @@ namespace Svelto.DataStructures
     /// but the count will stay zero. It's not the MB responsibility to track the count
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    internal struct MBInternal<T>:IBuffer<T> 
+    struct MBInternal<T>:IBuffer<T> 
     {
         public MBInternal(T[]  array) : this()
         {

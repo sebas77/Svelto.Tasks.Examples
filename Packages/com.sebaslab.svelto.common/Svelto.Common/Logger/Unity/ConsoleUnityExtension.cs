@@ -68,7 +68,7 @@ namespace Svelto
                     Application.GetStackTraceLogType(LogType.Assert), Application.GetStackTraceLogType(LogType.Error),
                     Application.GetStackTraceLogType(LogType.Log), Application.GetStackTraceLogType(LogType.Exception));
 #endif
-                //CatchEmAll is designed to completely replace the Unity Logger, so we don't need it's stack anymore
+                //CatchEmAll is designed to completely replace the Unity Logger, so we don't need its stack anymore
                 Application.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
                 Application.SetStackTraceLogType(LogType.Assert, StackTraceLogType.None);
                 Application.SetStackTraceLogType(LogType.Exception, StackTraceLogType.None);

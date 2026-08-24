@@ -8,10 +8,10 @@ namespace Svelto.Tasks.Lean
 {
     public readonly struct ValueTaskRunnerAwaiter : ICriticalNotifyCompletion
     {
-        readonly SteppableRunner _runner;
+        readonly IGenericLeanRunner _runner;
         readonly ValueTaskAwaiter _taskAwaiter;
 
-        public ValueTaskRunnerAwaiter(ValueTask task, SteppableRunner runner)
+        public ValueTaskRunnerAwaiter(ValueTask task, IGenericLeanRunner runner)
         {
             _taskAwaiter = task.GetAwaiter();
             _runner = runner;
@@ -35,10 +35,10 @@ namespace Svelto.Tasks.Lean
     
     public readonly struct TaskRunnerAwaiter : ICriticalNotifyCompletion
     {
-        readonly SteppableRunner _runner;
+        readonly IGenericLeanRunner _runner;
         readonly TaskAwaiter _taskAwaiter;
 
-        public TaskRunnerAwaiter(Task task, SteppableRunner runner)
+        public TaskRunnerAwaiter(Task task, IGenericLeanRunner runner)
         {
             _taskAwaiter = task.GetAwaiter();
             _runner = runner;
@@ -63,12 +63,17 @@ namespace Svelto.Tasks.Lean
 // extension method to get our awaiter
     public static class SveltoAwaiterExtensions
     {
-        public static ValueTaskRunnerAwaiter RunOn(this ValueTask task, SteppableRunner runner)
+        /// <summary>
+        /// Await a standard .NET Task/ValueTask with the async continuation posted onto the given
+        /// Lean runner instead of the default synchronization context. Works with any runner of
+        /// LeanSveltoTask (SteppableRunner, MultiThreadRunner, ...).
+        /// </summary>
+        public static ValueTaskRunnerAwaiter RunOn(this ValueTask task, IGenericLeanRunner runner)
         {
             return new ValueTaskRunnerAwaiter(task, runner);
         }
-        
-        public static TaskRunnerAwaiter RunOn(this Task task, SteppableRunner runner)
+
+        public static TaskRunnerAwaiter RunOn(this Task task, IGenericLeanRunner runner)
         {
             return new TaskRunnerAwaiter(task, runner);
         }

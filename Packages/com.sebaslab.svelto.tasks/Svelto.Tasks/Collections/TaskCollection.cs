@@ -158,7 +158,7 @@ namespace Svelto.Tasks
             //“Which individual stack am I executing right now?”
             _currentStackIndex = currentindex;
             StructFriendlyStack[] arrayOfTasks = rawListOfStacks;
-            //it's the responsability of the caller method to pop this enumerator from the stack, here we just execute
+            //it's the responsibility of the caller method to pop this enumerator from the stack, here we just execute
             ref var enumerator = ref arrayOfTasks[_currentStackIndex].Peek();
 
             bool isDone  = !enumerator.MoveNext();

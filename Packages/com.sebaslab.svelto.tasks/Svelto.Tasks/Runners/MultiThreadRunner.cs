@@ -19,7 +19,7 @@ namespace Svelto.Tasks
 {
     namespace Lean
     {
-        public sealed class MultiThreadRunner : MultiThreadRunner<IEnumerator<TaskContract>>
+        public sealed class MultiThreadRunner : MultiThreadRunner<IEnumerator<TaskContract>>, IGenericLeanRunner
         {
             public MultiThreadRunner(string name, bool relaxed = false, bool tightTasks = false) : base(name, relaxed,
                 tightTasks) { }
@@ -27,7 +27,7 @@ namespace Svelto.Tasks
             public MultiThreadRunner(string name, uint intervalInMs) : base(name, intervalInMs) { }
         }
 
-        public class MultiThreadRunner<T> : Svelto.Tasks.MultiThreadRunner<LeanSveltoTask<T>>
+        public class MultiThreadRunner<T> : Svelto.Tasks.MultiThreadRunner<LeanSveltoTask<T>>, IGenericLeanRunner<T>
                 where T : IEnumerator<TaskContract>
         {
             public MultiThreadRunner(string name, bool relaxed = false, bool tightTasks = false) : base(name, relaxed,
@@ -84,7 +84,7 @@ namespace Svelto.Tasks
     }
 
     /// <summary>
-    /// The multithread runner always uses just one thread to run all the couroutines
+    /// The multithread runner always uses just one thread to run all the coroutines
     /// If you want to use a separate thread, you will need to create another MultiThreadRunner 
     /// </summary>
     /// <typeparam name="TTask"></typeparam>
@@ -401,8 +401,10 @@ namespace Svelto.Tasks
             /// Acquire: The thread is spinning/waiting.
             /// Release: The thread has been signaled to wake up (by AddTask, Resume, Stop, etc.).
             /// </summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             void QuickLockingMechanism()
             {
+               
                     var quickIterations = 0;
                     var frequency       = 128;
 
@@ -422,9 +424,11 @@ namespace Svelto.Tasks
 
                         ThreadUtility.Wait(ref quickIterations, frequency);
                     }
-                    
+               
+              
                     //After the spinning, just revert to the normal locking mechanism
                     RelaxedLockingMechanism();
+               
             }
 
             /// <summary>

@@ -1,8 +1,5 @@
 #if TASKS_PROFILER_ENABLED
-//#define ENABLE_PIX_EVENTS
-
 using System;
-using System.Collections;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -16,49 +13,106 @@ namespace Svelto.Tasks.Profiler
     public static class TaskProfiler
     {
         static readonly ThreadLocal<Stopwatch> _stopwatch = new ThreadLocal<Stopwatch>(() => new Stopwatch());
-        
+
         static readonly object LockObject = new object();
+
+        static readonly Regex _iteratorNameRegex = new Regex(@"^.*\.(\w+)\+<(\w+)>d__\d+$");
+
+        //nested generic wrapper enumerators report the wrapped task type, e.g.
+        //Ns.Outer`1+WrapEnumerator[[Ns.Inner.Type, Assembly-CSharp]] renders as Ns.Inner.Type
+        static readonly Regex _wrapperNameRegex =
+            new Regex(@"^.*\.(\w+)`\d+\+(\w+)\[\[(\w+(\.\w+)*), .*$");
+
+        //unknown task shapes still must not leak assembly qualifiers
+        static readonly Regex _assemblyQualifierRegex =
+            new Regex(@",\s*\w[\w.-]*,\s*Version=[^,\]]*,\s*Culture=[^,\]]*,\s*PublicKeyToken=[^\],]*");
 
         static readonly FasterDictionary<RefWrapper<string>, FasterDictionary<RefWrapper<string>, TaskInfo>> taskInfos =
             new FasterDictionary<RefWrapper<string>, FasterDictionary<RefWrapper<string>, TaskInfo>>();
 
-        public static StepState MonitorUpdateDuration<T>( ref T sveltoTask, string runnerName, (int index, TombstoneHandle currentSpawnedTaskToRunIndex) valueTuple) where T : ISveltoTask
+        static ITaskProfilerDriver _driver;
+
+        /// <summary>
+        /// Optional backend used to instrument runner and task scopes with an external profiling API.
+        /// When null, only the built-in task timing data is collected.
+        /// </summary>
+        public static ITaskProfilerDriver Driver
+        {
+            get => Volatile.Read(ref _driver);
+            set => Volatile.Write(ref _driver, value);
+        }
+
+        internal static ITaskProfilerDriver BeginRunner(string runnerName)
+        {
+            var driver = Driver;
+            driver?.BeginRunner(runnerName);
+
+            return driver;
+        }
+
+        internal static void EndRunner(ITaskProfilerDriver driver, string runnerName)
+        {
+            driver?.EndRunner(runnerName);
+        }
+
+        public static StepState MonitorUpdateDuration<T>(ref T sveltoTask, string runnerName,
+            (int index, TombstoneHandle currentSpawnedTaskToRunIndex) valueTuple) where T : ISveltoTask
         {
             var taskName = sveltoTask.name;
-#if ENABLE_PIX_EVENTS
-            PixWrapper.PIXBeginEventEx(0x11000000, key);
-#endif
-            _stopwatch.Value.Start();
-            var result = sveltoTask.Step(valueTuple.index, valueTuple.currentSpawnedTaskToRunIndex);
-            _stopwatch.Value.Stop();
-#if ENABLE_PIX_EVENTS
-            PixWrapper.PIXEndEventEx();
-#endif
-            lock (LockObject)
+
+            StepState result;
+            float elapsedMilliseconds = 0;
+            var driver = Driver;
+
+            driver?.BeginTask(runnerName, taskName);
+            try
             {
-                ref var infosPerRunnner = ref taskInfos.GetOrAdd(runnerName, () => new FasterDictionary<RefWrapper<string>, TaskInfo>());
-                string pattern = @"^.*\.(\w+)\+<(\w+)>d__\d+$";
-                string replacement = "$1.$2";
-
-// Perform the replacement
-                taskName = Regex.Replace(taskName, pattern, replacement);
-                
-                if (infosPerRunnner.TryGetValue(taskName, out TaskInfo info) == false)
+                var stopwatch = _stopwatch.Value;
+                stopwatch.Restart();
+                try
                 {
-                    info = new TaskInfo(taskName, runnerName);
-                    infosPerRunnner.Add(taskName, info);
+                    result = sveltoTask.Step(valueTuple.index, valueTuple.currentSpawnedTaskToRunIndex);
                 }
-                else
+                finally
                 {
-                    info.AddUpdateDuration((float) _stopwatch.Value.Elapsed.TotalMilliseconds);
-
-                    infosPerRunnner[taskName] = info;
+                    stopwatch.Stop();
+                    elapsedMilliseconds = (float)stopwatch.Elapsed.TotalMilliseconds;
+                    stopwatch.Reset();
                 }
             }
+            finally
+            {
+                driver?.EndTask(runnerName, taskName, elapsedMilliseconds);
+            }
 
-            _stopwatch.Value.Reset();
+            lock (LockObject)
+            {
+                ref var infosPerRunnner = ref taskInfos.GetOrAdd(runnerName,
+                    () => new FasterDictionary<RefWrapper<string>, TaskInfo>());
+
+                //GetOrAdd only invokes the builder on the first insert, so the regex name is paid once per task
+                ref var info = ref infosPerRunnner.GetOrAdd(taskName,
+                    () => new TaskInfo(NormalizeTaskName(taskName), runnerName));
+
+                info.AddUpdateDuration(elapsedMilliseconds);
+            }
 
             return result;
+        }
+
+        internal static string NormalizeTaskName(string taskName)
+        {
+            //compiler-generated iterator state machines: Ns.Outer+<Method>d__N -> Outer.Method
+            taskName = _iteratorNameRegex.Replace(taskName, "$1.$2");
+
+            //nested generic wrapper enumerators report the wrapped task type, e.g.
+            //Ns.Outer`1+WrapEnumerator[[Ns.Inner.Type, Assembly-CSharp]] renders as Ns.Inner.Type
+            if (_wrapperNameRegex.IsMatch(taskName) == true)
+                return _wrapperNameRegex.Match(taskName).Groups[3].Value;
+
+            //task implementations not covered by the patterns above keep their type name,
+            //but never leak assembly qualifiers
+            return _assemblyQualifierRegex.Replace(taskName, string.Empty);
         }
 
         public static void ResetDurations(string runnerName)
@@ -109,7 +163,7 @@ namespace Svelto.Tasks.Profiler
 
                 foreach (var (key, value) in taskInfos)
                 {
-                    value.CopyValuesTo(infos, (uint) currentCount);
+                    value.CopyValuesTo(infos, (uint)currentCount);
                     currentCount += value.count;
                 }
             }

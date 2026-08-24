@@ -35,8 +35,11 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
             QualitySettings.vSyncCount = 0;
         }
 
-        void Start()
+        void OnEnable()
         {
+            Volatile.Write(ref _stopping, false);
+            _publishedGen = -1;
+            _ackedGen = -1;
             _updateRunner = new SteppableRunner("MillionPoints.IndependentThreads.Update");
             _multiThreadRunner = new MultiThreadRunner("MillionPoints.IndependentThreads.Coordinator");
 
@@ -62,9 +65,12 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
                     _particleTasks.Complete();
 
                 _particleTasks.Dispose();
+                _particleTasks = null;
             }
 
             _updateRunner?.Dispose();
+            _updateRunner = null;
+            _multiThreadRunner = null;
 
             if (_gpuPositionsView.IsCreated)
                 _gpuPositionsView.Dispose();
@@ -82,13 +88,28 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
                 _cpuParticles.Dispose();
 
             if (_particleDataBuffer != null)
+            {
                 _particleDataBuffer.Release();
+                _particleDataBuffer = null;
+            }
 
             if (_albedoBuffer != null)
+            {
                 _albedoBuffer.Release();
+                _albedoBuffer = null;
+            }
 
             if (_GPUInstancingArgsBuffer != null)
+            {
                 _GPUInstancingArgsBuffer.Release();
+                _GPUInstancingArgsBuffer = null;
+            }
+
+            if (_pointMesh != null)
+            {
+                Destroy(_pointMesh);
+                _pointMesh = null;
+            }
         }
 
         void InitializeParticleData()

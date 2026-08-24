@@ -39,9 +39,9 @@ namespace Svelto.Tasks
         /// <summary>
         /// in a ParallelTasks scenario with N tasks, each task can ultimately have only two options: run
         /// synchronously on the runner, actually blocking the other tasks, or yielding. Only one yield per task
-        /// per frame can happen. Therefore a ParalleTask or get stuck in one specific task until is done because
+        /// per frame can happen. Therefore a ParallelTask either gets stuck in one specific task until it is done because
         /// it's running synchronously, or at a given point yield all the tasks on the current frame.
-        /// Basically each tasks runs synchronously until the next MoveNext() that will yield the execution
+        /// Basically each task runs synchronously until the next MoveNext() that will yield the execution
         /// to the next task until there are no more tasks and therefore resuming the next iteration (or frame)
         /// </summary>
         /// <returns></returns>

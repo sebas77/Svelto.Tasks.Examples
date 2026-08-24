@@ -21,7 +21,6 @@ Assets/
   Startup/                           Project entry scene and scene-selection menu
     Startup.unity                     Build index 0 project entry scene
     StartupSceneMenu.cs               Dynamic enabled-build-scene selector
-  Labyrinth/                         Labyrinth path-search examples and scene
   MillionPoints/                     One-million-particle comparison examples
     MillionPoints.unity                Primary MillionPoints scene
     MillionPoints.mat                 Instanced-point material
@@ -53,8 +52,7 @@ available menu choices.
 The verified Build Settings order is:
 
 1. `Assets/Startup/Startup.unity`
-2. `Assets/Labyrinth/LabyrinthDemo.unity`
-3. `Assets/MillionPoints/main.unity`
+2. `Assets/MillionPoints/MillionPoints.unity`
 
 ## MillionPoints
 

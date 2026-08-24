@@ -1,4 +1,3 @@
-using Svelto.DataStructures;
 using Svelto.Tasks.Internal;
 
 namespace Svelto.Tasks.FlowModifiers    

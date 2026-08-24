@@ -91,6 +91,9 @@ namespace Svelto.Tasks.Internal
 
 #if TASKS_PROFILER_ENABLED
                 Profiler.TaskProfiler.ResetDurations(_runnerName);
+                var profilerDriver = Profiler.TaskProfiler.BeginRunner(_runnerName);
+                try
+                {
 #endif
                 _info.Reset();
 
@@ -135,9 +138,8 @@ namespace Svelto.Tasks.Internal
                         }
                         catch (Exception e)
                         {
-                            Console.LogException(e, $"catching exception for root task {currentSpawnedTaskToRun.name}");
-
                             result = StepState.Faulted;
+                            TaskExceptionStrategy.HandleException(e);
                         }
 
                         if (result != StepState.Faulted && _runningCoroutines[(int)index] != currentSpawnedTaskToRunIndex)
@@ -181,15 +183,28 @@ namespace Svelto.Tasks.Internal
 
                         var hasCoroutineCompleted = (result & (StepState.Completed | StepState.Faulted)) != 0;
 
+                        //ATTENTION: CanMoveNext must be evaluated BEFORE checking if the index is out of bound.
+                        //CanMoveNext is allowed to change index: TimeSlicedFlow uses it to wrap the index back
+                        //to 0 when the end of the list is reached without the time slice being exhausted, so
+                        //that all the tasks are revisited several times in the same iteration until the budget
+                        //expires. If the out-of-bound check ran first, short-circuit evaluation would make the
+                        //wrap unreachable and TimeSlicedFlow would degrade to a plain TimeBoundFlow.
                         mustExit = 
                                 _runningCoroutines.count                                                                   == 0
-                             || index                                                                                      >= _runningCoroutines.count
-                             || _info.CanMoveNext<TSveltoTask>(ref index, _runningCoroutines.count, hasCoroutineCompleted) == false;
+                             || _info.CanMoveNext<TSveltoTask>(ref index, _runningCoroutines.count, hasCoroutineCompleted) == false
+                             || index                                                                                      >= _runningCoroutines.count;
                             
                     } while (mustExit == false);
                 }
 
                 return true;
+#if TASKS_PROFILER_ENABLED
+                }
+                finally
+                {
+                    Profiler.TaskProfiler.EndRunner(profilerDriver, _runnerName);
+                }
+#endif
             }
 
             /// <summary>

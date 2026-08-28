@@ -17,8 +17,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Assembly-CSharp", "Assembly
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unity.Collections.CodeGen", "Unity.Collections.CodeGen.csproj", "{efaf015a-30fe-fdf1-ad84-11c79633ae9a}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Svelto.Pool.Debugger", "Svelto.Pool.Debugger.csproj", "{f138a9ac-221e-7572-21b0-7d4aa81ea21a}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unity.Collections.Editor", "Unity.Collections.Editor.csproj", "{d5038797-0218-45f2-f64b-b3b3a5548bd0}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MCPForUnity.Runtime", "MCPForUnity.Runtime.Player.csproj", "{ffc832f6-334a-939c-cd44-7869c1a18b5d}"
@@ -64,8 +62,6 @@ Global
 		{6e095e9e-5efc-0b71-8df6-b4cca0a56684}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{efaf015a-30fe-fdf1-ad84-11c79633ae9a}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{efaf015a-30fe-fdf1-ad84-11c79633ae9a}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{f138a9ac-221e-7572-21b0-7d4aa81ea21a}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{f138a9ac-221e-7572-21b0-7d4aa81ea21a}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{d5038797-0218-45f2-f64b-b3b3a5548bd0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{d5038797-0218-45f2-f64b-b3b3a5548bd0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{ffc832f6-334a-939c-cd44-7869c1a18b5d}.Debug|Any CPU.ActiveCfg = Debug|Any CPU

@@ -20,6 +20,7 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
 
         [SerializeField] uint _particleCount;
         [SerializeField] Material _material;
+        [SerializeField] Shader _shader;
         [SerializeField] Vector3 _BoundCenter = Vector3.zero;
         [SerializeField] Vector3 _BoundSize = new Vector3(300f, 300f, 300f);
 
@@ -135,7 +136,7 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
             _GPUInstancingArgs[1] = _particleCount;
             _GPUInstancingArgsBuffer.SetData(_GPUInstancingArgs);
 
-            _material.shader = Shader.Find("Custom/MillionPointsCPU");
+            _material.shader = _shader;
             _material.SetBuffer("_ParticleDataBuffer", _particleDataBuffer);
             _material.SetBuffer("_AlbedoBuffer", _albedoBuffer);
             _bounds = new Bounds(_BoundCenter, _BoundSize);

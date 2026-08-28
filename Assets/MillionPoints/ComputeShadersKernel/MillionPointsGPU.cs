@@ -18,6 +18,7 @@ namespace Svelto.Tasks.Example.MillionPoints.ComputeShaders
         [SerializeField] ComputeShader _ComputeShader;
         [SerializeField] int _particleCount = 1000000;
         [SerializeField] Material _material;
+        [SerializeField] Shader _shader;
         [SerializeField] Vector3  _BoundCenter = Vector3.zero;
         [SerializeField] Vector3  _BoundSize   = new Vector3(300f, 300f, 300f);
 
@@ -41,7 +42,7 @@ namespace Svelto.Tasks.Example.MillionPoints.ComputeShaders
 
         void Awake()
         {
-            Application.targetFrameRate = 240;
+            Application.targetFrameRate = -1;
             QualitySettings.vSyncCount = 0;
         }
 
@@ -82,8 +83,7 @@ namespace Svelto.Tasks.Example.MillionPoints.ComputeShaders
             _GPUInstancingArgs[1] = (uint) _particleCount;
             _GPUInstancingArgsBuffer.SetData(_GPUInstancingArgs);
 
-            var materialShader = Shader.Find("Custom/MillionPoints");
-            _material.shader = materialShader;
+            _material.shader = _shader;
             _material.SetBuffer("_ParticleDataBuffer", _particleDataBuffer);
 
             _kernelId = _ComputeShader.FindKernel("MainCS");

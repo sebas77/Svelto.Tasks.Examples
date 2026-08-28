@@ -862,6 +862,7 @@ MonoBehaviour:
     GPU upload region, then the main thread renders.'
   _particleCount: 1000000
   _material: {fileID: 2100000, guid: 6c4b06b85eebc4e4da80676c59928354, type: 2}
+  _shader: {fileID: 4800000, guid: e5b82136ff0b05043be5b90fe501fb88, type: 3}
   _BoundCenter: {x: 0, y: 0, z: 0}
   _BoundSize: {x: 300, y: 300, z: 300}
 --- !u!4 &1741070209
@@ -894,6 +895,7 @@ MonoBehaviour:
   Notes: 
   _particleCount: 1000000
   _material: {fileID: 2100000, guid: 6c4b06b85eebc4e4da80676c59928354, type: 2}
+  _shader: {fileID: 4800000, guid: e5b82136ff0b05043be5b90fe501fb88, type: 3}
   _BoundCenter: {x: 0, y: 0, z: 0}
   _BoundSize: {x: 300, y: 300, z: 300}
 --- !u!114 &1741070212
@@ -914,6 +916,7 @@ MonoBehaviour:
     without waiting.'
   _particleCount: 1000000
   _material: {fileID: 2100000, guid: 6c4b06b85eebc4e4da80676c59928354, type: 2}
+  _shader: {fileID: 4800000, guid: e5b82136ff0b05043be5b90fe501fb88, type: 3}
   _BoundCenter: {x: 0, y: 0, z: 0}
   _BoundSize: {x: 300, y: 300, z: 300}
 --- !u!114 &1741070213
@@ -933,6 +936,7 @@ MonoBehaviour:
     Burst pass N+1 into the other result buffer.'
   _particleCount: 1000000
   _material: {fileID: 2100000, guid: 6c4b06b85eebc4e4da80676c59928354, type: 2}
+  _shader: {fileID: 4800000, guid: e5b82136ff0b05043be5b90fe501fb88, type: 3}
   _BoundCenter: {x: 0, y: 0, z: 0}
   _BoundSize: {x: 300, y: 300, z: 300}
 --- !u!114 &1741070214
@@ -953,6 +957,7 @@ MonoBehaviour:
   _ComputeShader: {fileID: 7200000, guid: d476d2903d79d3a429df490d3f805933, type: 3}
   _particleCount: 1000000
   _material: {fileID: 2100000, guid: 6c4b06b85eebc4e4da80676c59928354, type: 2}
+  _shader: {fileID: 4800000, guid: fd77fe870f1bb0742bb49a8b3d783119, type: 3}
   _BoundCenter: {x: 0, y: 0, z: 0}
   _BoundSize: {x: 300, y: 300, z: 300}
 --- !u!114 &1741070215

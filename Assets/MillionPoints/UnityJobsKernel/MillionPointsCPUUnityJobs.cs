@@ -14,6 +14,7 @@ namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
 
         [SerializeField] int _particleCount;
         [SerializeField] Material _material;
+        [SerializeField] Shader _shader;
         [SerializeField] Vector3 _BoundCenter = Vector3.zero;
         [SerializeField] Vector3 _BoundSize = new Vector3(300f, 300f, 300f);
         
@@ -80,8 +81,7 @@ namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
             _GPUInstancingArgs[1] = (uint) _particleCount;
             _GPUInstancingArgsBuffer.SetData(_GPUInstancingArgs);
 
-            var materialShader = Shader.Find("Custom/MillionPointsCPU");
-            _material.shader = materialShader;
+            _material.shader = _shader;
             _material.SetBuffer("_ParticleDataBuffer", _particleDataBuffer);
             _material.SetBuffer("_AlbedoBuffer", _albedoBuffer);
 

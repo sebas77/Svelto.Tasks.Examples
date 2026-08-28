@@ -25,7 +25,7 @@
 
 			#pragma vertex vert
 			#pragma fragment frag
-			#pragma target 3.5
+            #pragma target 4.5
 
 			// Procedural instancing driven by Graphics.DrawMeshInstancedIndirect:
 			// the per-instance data comes from the particle buffers, not from an

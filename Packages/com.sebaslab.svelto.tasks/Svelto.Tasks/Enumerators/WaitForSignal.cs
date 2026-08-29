@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Threading;
-using NUnit.Framework.Internal;
 
 namespace Svelto.Tasks.Enumerators
 {

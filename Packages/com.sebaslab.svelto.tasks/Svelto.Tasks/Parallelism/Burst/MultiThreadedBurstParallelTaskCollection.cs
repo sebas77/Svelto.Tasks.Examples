@@ -1,4 +1,4 @@
-#if SVELTO_BURST
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -325,4 +325,4 @@ public sealed class MultiThreadedBurstParallelTaskCollection<TTask> : IEnumerato
     readonly RunEnumerator _runEnumerator;
     int _isDisposed;
 }
-#endif
+

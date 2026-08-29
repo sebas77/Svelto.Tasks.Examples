@@ -1,8 +1,9 @@
 #if SVELTO_BURST
+using System;
 using Svelto.Tasks.Parallelism;
 
 /// <summary>
-/// Splits a concrete Burst range task across the collection's worker threads.
+/// Splits a concrete Burst range task into fixed-size work-stealing segments.
 /// The collection performs managed scheduling only. Each concrete task owns the
 /// statically-known call to its non-generic Burst entry point.
 /// </summary>
@@ -15,28 +16,20 @@ public sealed class MultiThreadedBurstParallelTaskCollection<TTask> :
     {
     }
 
-    public void Add(in TTask prototype, int iterations)
+    public void Add(in TTask prototype, int iterations, int elementsPerTask)
     {
         if (isRunning == true)
             throw new MultiThreadedParallelTaskCollectionException(
                 "can't add tasks on a started MultiThreadedParallelTaskCollection");
+        if (elementsPerTask <= 0)
+            throw new ArgumentOutOfRangeException(nameof(elementsPerTask));
 
-        int rangeCount = _runners.Length;
-        int iterationsPerRange = iterations / rangeCount;
-        int remainder = iterations % rangeCount;
-
-        for (int range = 0; range < rangeCount; range++)
+        //the last segment absorbs the division remainder so no iteration is left out
+        for (int start = 0; start < iterations; start += elementsPerTask)
         {
             TTask rangeTask = prototype;
-            rangeTask.SetRange(range * iterationsPerRange, iterationsPerRange);
+            rangeTask.SetRange(start, Math.Min(elementsPerTask, iterations - start));
             base.Add(rangeTask);
-        }
-
-        if (remainder > 0)
-        {
-            TTask remainderTask = prototype;
-            remainderTask.SetRange(iterationsPerRange * rangeCount, remainder);
-            base.Add(remainderTask);
         }
     }
 }

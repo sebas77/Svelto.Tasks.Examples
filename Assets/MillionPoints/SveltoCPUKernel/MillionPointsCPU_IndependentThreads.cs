@@ -1,34 +1,35 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Threading;
-using Svelto.Common;
 using Svelto.DataStructures;
 using Svelto.Tasks;
-using Svelto.Tasks.ExtraLean;
-using Svelto.Tasks.Parallelism;
+using Svelto.Tasks.Enumerators;
+using Svelto.Tasks.Lean;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Rendering;
 using Random = UnityEngine.Random;
 
 namespace Svelto.Tasks.Example.MillionPoints.Multithreading
 {
-    // Latest-wins pipeline. Its dedicated MultiThreadRunner is only a
-    // coordinator: particle passes run on the shared-style Burst range-task
-    // collection, while the main thread uploads the newest completed result.
+    // Independent runner pipeline. A reusable main-thread task opens a fence-safe mapped
+    // upload slot, then the coordinator launches Burst workers that write into it directly.
+    // The render root closes completed writes and draws the latest published slot.
     public class MillionPointsCPU_IndependentThreads : MonoBehaviour
     {
         [TextArea] public string Notes =
-            "Independent threads strategy (Burst): a coordinator computes back-to-back " +
-            "passes into a double buffer and publishes the newest generation. The main " +
-            "thread writes and renders the latest completed result through a mapped GPU " +
-            "upload region without waiting.";
+            "Independent threads strategy (Burst): a main-thread task opens a fence-safe " +
+            "mapped upload slot, background Burst tasks write into it directly, and the " +
+            "render task closes completed writes before drawing the latest slot.";
 
         [SerializeField] uint _particleCount;
         [SerializeField] Material _material;
         [SerializeField] Shader _shader;
         [SerializeField] Vector3 _BoundCenter = Vector3.zero;
         [SerializeField] Vector3 _BoundSize = new Vector3(300f, 300f, 300f);
+        [SerializeField, Min(1)] int _elementsPerTask = 8192;
 
         void Awake()
         {
@@ -39,14 +40,21 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
         void OnEnable()
         {
             Volatile.Write(ref _stopping, false);
-            _publishedGen = -1;
-            _ackedGen = -1;
+            Volatile.Write(ref _uploadState, UploadClosed);
+            _frameIndex = 0;
+            _hasCompletedRenderBuffer = false;
             _updateRunner = new SteppableRunner("MillionPoints.IndependentThreads.Update");
             _multiThreadRunner = new MultiThreadRunner("MillionPoints.IndependentThreads.Coordinator");
 
             InitializeParticleData();
             InitializeRendering();
             InitializeTasks();
+
+            _beginWriteTask = new BeginWriteTask(this);
+
+            //These roots intentionally start independently. The renderer advances every
+            //Unity Update; the coordinator requests mapped slots through the update runner.
+            RenderAndUploadOnMainThread().RunOn(_updateRunner);
             WorkerLoop().RunOn(_multiThreadRunner);
         }
 
@@ -65,6 +73,8 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
                 if (_particleTasks.isRunning)
                     _particleTasks.Complete();
 
+                EndWriteIfOpen();
+
                 _particleTasks.Dispose();
                 _particleTasks = null;
             }
@@ -72,26 +82,26 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
             _updateRunner?.Dispose();
             _updateRunner = null;
             _multiThreadRunner = null;
+            _beginWriteTask = null;
+            _latestRenderFences = null;
+            _hasRenderFence = null;
 
-            if (_gpuPositionsView.IsCreated)
-                _gpuPositionsView.Dispose();
-
-            if (_nativeWriteSlot.isValid)
-                _nativeWriteSlot.Dispose();
-
-            if (_particleTime.isValid)
-                _particleTime.Dispose();
-
-            if (_gpuPositions.isValid)
-                _gpuPositions.Dispose();
+            if (_frameData.isValid)
+                _frameData.Dispose();
 
             if (_cpuParticles.isValid)
                 _cpuParticles.Dispose();
 
-            if (_particleDataBuffer != null)
+            if (_uploadBuffers != null)
             {
-                _particleDataBuffer.Release();
-                _particleDataBuffer = null;
+                for (int i = 0; i < _uploadBuffers.Length; i++)
+                {
+                    if (_uploadBuffers[i] != null)
+                    {
+                        _uploadBuffers[i].Release();
+                        _uploadBuffers[i] = null;
+                    }
+                }
             }
 
             if (_albedoBuffer != null)
@@ -115,27 +125,20 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
 
         void InitializeParticleData()
         {
-            _cpuParticles = NativeDynamicArray.Alloc<PipelinedBurstParticleData>(
+            _cpuParticles = NativeDynamicArray.Alloc<IndependentThreadsBurstParticleData>(
                 Svelto.Common.Allocator.Persistent, _particleCount);
-            _gpuPositions = NativeDynamicArray.Alloc<float3>(
-                Svelto.Common.Allocator.Persistent, _particleCount * 2);
-            _particleTime = NativeDynamicArray.Alloc<float>(Svelto.Common.Allocator.Persistent, 1);
-            _nativeWriteSlot = NativeDynamicArray.Alloc<int>(Svelto.Common.Allocator.Persistent, 1);
+            _frameData = NativeDynamicArray.Alloc<IndependentThreadsFrameData>(
+                Svelto.Common.Allocator.Persistent, 1);
 
             var albedos = new float3[(int) _particleCount];
             for (uint index = 0; index < _particleCount; index++)
             {
-                _cpuParticles.Set(index, new PipelinedBurstParticleData(
+                _cpuParticles.Set(index, new IndependentThreadsBurstParticleData(
                     new float3(Random.Range(-10.0f, 10.0f), Random.Range(-10.0f, 10.0f),
                                Random.Range(-10.0f, 10.0f)), Random.Range(1.0f, 100.0f)));
                 albedos[(int) index] = new float3(
                     Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f));
             }
-
-            _particleTime.Set(0, 0.0f);
-            _nativeWriteSlot.Set(0, 0);
-            _gpuPositions.SetCount<float3>(_particleCount * 2);
-            _gpuPositionsView = _gpuPositions.ToNativeArray<float3>();
 
             _albedoBuffer = new ComputeBuffer((int) _particleCount, sizeof(float) * 3);
             _albedoBuffer.SetData(albedos);
@@ -143,13 +146,17 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
 
         void InitializeRendering()
         {
-            _particleDataBuffer = new ComputeBuffer((int) _particleCount, sizeof(float) * 3,
-                ComputeBufferType.Structured, ComputeBufferMode.SubUpdates);
+            _uploadBuffers = new ComputeBuffer[2];
+            for (int i = 0; i < _uploadBuffers.Length; i++)
+                _uploadBuffers[i] = new ComputeBuffer((int) _particleCount, sizeof(float) * 3,
+                    ComputeBufferType.Structured, ComputeBufferMode.SubUpdates);
+
+            _latestRenderFences = new GraphicsFence[_uploadBuffers.Length];
+            _hasRenderFence = new bool[_uploadBuffers.Length];
 
             _pointMesh = new Mesh
             {
-                vertices = new[] {new Vector3(0, 0)},
-                normals = new[] {new Vector3(0, 1, 0)}
+                vertices = new[] {new Vector3(0, 0)}
             };
             _pointMesh.SetIndices(new[] {0}, MeshTopology.Points, 0);
 
@@ -159,8 +166,10 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
             _GPUInstancingArgs[1] = _particleCount;
             _GPUInstancingArgsBuffer.SetData(_GPUInstancingArgs);
 
+            _activeRenderBuffer = _uploadBuffers[0];
+            _activeRenderSlot = 0;
             _material.shader = _shader;
-            _material.SetBuffer("_ParticleDataBuffer", _particleDataBuffer);
+            _material.SetBuffer("_ParticleDataBuffer", _activeRenderBuffer);
             _material.SetBuffer("_AlbedoBuffer", _albedoBuffer);
         }
 
@@ -168,101 +177,201 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
         {
             uint workerCount = (uint) Math.Max(1, Environment.ProcessorCount - 1);
 
-            MillionPointsPipelinedBurstKernel.Execute(
-                ref _cpuParticles, ref _gpuPositions, ref _particleTime, ref _nativeWriteSlot,
-                (int) _particleCount, 0, 0);
+            //Force Burst direct-call compilation during setup instead of the first measured pass.
+            NativeArray<float3> emptyRegion = default;
+            MillionPointsIndependentThreadsBurstKernel.Execute(
+                ref _cpuParticles, ref emptyRegion, 0f, 0, 0);
 
             _particleTasks =
-                new MultiThreadedBurstParallelTaskCollection<PipelinedBurstRangeTask>(
+                new MultiThreadedBurstParallelTaskCollection<IndependentThreadsBurstRangeTask>(
                     "MillionPoints.IndependentThreads", workerCount, true);
-            var prototype = new PipelinedBurstRangeTask(
-                _cpuParticles, _gpuPositions, _particleTime, _nativeWriteSlot, (int) _particleCount);
-            _particleTasks.Add(in prototype, (int) _particleCount);
+            var prototype = new IndependentThreadsBurstRangeTask(_cpuParticles, _frameData);
+            _particleTasks.Add(in prototype, (int) _particleCount, _elementsPerTask);
         }
 
-        void RunParticleJobs(int writeSlot, float time)
-        {
-            _particleTime.Set(0, time);
-            _nativeWriteSlot.Set(0, writeSlot);
-            _particleTasks.Complete();
-        }
-
-        NativeArray<float3> GetOutputBuffer(int slot)
-        {
-            return _gpuPositionsView.GetSubArray(slot * (int) _particleCount, (int) _particleCount);
-        }
-
-        IEnumerator WorkerLoop()
+        //Cross-thread ownership and double-buffer cycle:
+        //
+        //  Coordinator                 Update runner                  GPU queue
+        //      |                            |                              |
+        //      |-- RunOn(BeginWrite) ----->|                              |
+        //      |                            | wait latestFence[slot]       |
+        //      |                            | BeginWrite(slot)             |
+        //      |<-- continuation done ------|                              |
+        //      |                            |                              |
+        //      |-- Burst workers write mapped slot                        |
+        //      |-- state = READY_TO_CLOSE                                 |
+        //      |                            |                              |
+        //      |                            | EndWrite(slot)               |
+        //      |                            | publish + Draw(slot) ------->|
+        //      |                            | CreateFence(slot) ---------->|
+        //      |                            |                              |
+        //      +-- immediately requests the other slot; its BeginWriteTask waits until
+        //          the previous mapping is CLOSED and that slot's newest fence has passed.
+        //
+        //  CLOSED --BeginWrite--> COMPUTING --workers done--> READY_TO_CLOSE
+        //     ^                                                   |
+        //     +----------------------- EndWrite ------------------+
+        //
+        //Slots alternate with _frameIndex & 1. RenderAndUpload may draw one completed slot
+        //several times while workers fill the other, replacing only that slot's latest fence.
+        IEnumerator<TaskContract> WorkerLoop()
         {
             var then = DateTime.Now;
-            RenderAndUploadOnMainThread().RunOn(_updateRunner);
 
-            int pass = 0;
             while (stopping == false)
             {
-                if (pass >= 2)
-                {
-                    var spin = new SpinWait();
-                    while (Volatile.Read(ref _ackedGen) < pass - 2 && stopping == false)
-                        spin.SpinOnce();
+                Volatile.Write(ref _requestedTime, (float) (DateTime.Now - then).TotalSeconds);
 
-                    if (stopping)
-                        break;
-                }
+                //This continuation may wait across Updates for slot ownership, but completes
+                //in the same MoveNext that calls BeginWrite. The coordinator can therefore
+                //launch the Burst pass without waiting for the rest of that Unity frame.
+                yield return _beginWriteTask.RunOn(_updateRunner);
 
-                float time = (float) (DateTime.Now - then).TotalSeconds;
-                RunParticleJobs(pass & 1, time);
-                Volatile.Write(ref _publishedGen, pass);
-                pass++;
+                //The reusable collection represents one complete computation pass. Yielding
+                //its run handle suspends this coordinator until every Burst range has written
+                //its disjoint portion of the mapped upload region.
+                yield return _particleTasks.Run().Continue();
 
-                yield return null;
+                //Release-publish every worker write to the main thread. EndWrite is legal only
+                //after this transition; an open mapping alone does not mean computation ended.
+                Volatile.Write(ref _uploadState, UploadReadyToClose);
             }
         }
 
-        IEnumerator RenderAndUploadOnMainThread()
+        //The main runner advances every frame. It closes a mapped slot only after the worker
+        //publishes UploadReadyToClose, then renders that completed slot independently while
+        //the coordinator requests and computes the next one.
+        IEnumerator<TaskContract> RenderAndUploadOnMainThread()
         {
             var bounds = new Bounds(_BoundCenter, _BoundSize);
-            int uploadedGen = -1;
 
             while (stopping == false)
             {
-                int generation = Volatile.Read(ref _publishedGen);
+                if (Volatile.Read(ref _uploadState) == UploadReadyToClose)
+                    PublishCompletedWrite();
 
-                if (generation != uploadedGen)
+                if (_hasCompletedRenderBuffer)
                 {
-                    NativeArray<float3> uploadRegion =
-                        _particleDataBuffer.BeginWrite<float3>(0, (int) _particleCount);
-                    NativeArray<float3>.Copy(GetOutputBuffer(generation & 1), uploadRegion);
-                    _particleDataBuffer.EndWrite<float3>((int) _particleCount);
-                    uploadedGen = generation;
+                    _material.SetBuffer("_ParticleDataBuffer", _activeRenderBuffer);
+                    Graphics.DrawMeshInstancedIndirect(
+                        _pointMesh, 0, _material, bounds, _GPUInstancingArgsBuffer);
+
+                    _latestRenderFences[_activeRenderSlot] = Graphics.CreateGraphicsFence(
+                        GraphicsFenceType.CPUSynchronisation,
+                        SynchronisationStageFlags.AllGPUOperations);
+                    _hasRenderFence[_activeRenderSlot] = true;
                 }
 
-                Volatile.Write(ref _ackedGen, generation);
-                Graphics.DrawMeshInstancedIndirect(_pointMesh, 0, _material, bounds, _GPUInstancingArgsBuffer);
-
-                yield return null;
+                yield return TaskContract.Yield.It;
             }
+        }
+
+        void PublishCompletedWrite()
+        {
+            ComputeBuffer completedBuffer = _openBuffer;
+            int completedSlot = _openSlot;
+
+            completedBuffer.EndWrite<float3>((int) _particleCount);
+            _frameData.Get<IndependentThreadsFrameData>(0).uploadRegion = default;
+            _openBuffer = null;
+
+            _activeRenderBuffer = completedBuffer;
+            _activeRenderSlot = completedSlot;
+            _hasCompletedRenderBuffer = true;
+
+            //Release the mapping before advertising Closed: BeginWriteTask may be queued on
+            //this same runner and can open the other slot as soon as it observes this state.
+            Volatile.Write(ref _uploadState, UploadClosed);
+        }
+
+        void EndWriteIfOpen()
+        {
+            if (Volatile.Read(ref _uploadState) == UploadClosed)
+                return;
+
+            _openBuffer.EndWrite<float3>((int) _particleCount);
+            _frameData.Get<IndependentThreadsFrameData>(0).uploadRegion = default;
+            _openBuffer = null;
+            Volatile.Write(ref _uploadState, UploadClosed);
+        }
+
+        //Reusable main-thread gate. It completes in the same call that opens a mapped slot.
+        //Until then it yields if the previous pass has not been closed or if the next slot's
+        //latest draw fence still gives ownership to the GPU.
+        sealed class BeginWriteTask : IEnumerator<TaskContract>
+        {
+            internal BeginWriteTask(MillionPointsCPU_IndependentThreads owner)
+            {
+                _owner = owner;
+            }
+
+            public bool MoveNext()
+            {
+                if (Volatile.Read(ref _owner._uploadState) != UploadClosed)
+                    return true;
+
+                int slot = _owner._frameIndex & 1;
+
+                if (_owner._hasRenderFence[slot] &&
+                    _owner._latestRenderFences[slot].passed == false)
+                    return true;
+
+                ComputeBuffer buffer = _owner._uploadBuffers[slot];
+                _owner._hasRenderFence[slot] = false;
+
+                NativeArray<float3> uploadRegion =
+                    buffer.BeginWrite<float3>(0, (int) _owner._particleCount);
+
+                _owner._openBuffer = buffer;
+                _owner._openSlot = slot;
+                _owner._frameData.Set(0, new IndependentThreadsFrameData(
+                    uploadRegion, Volatile.Read(ref _owner._requestedTime)));
+                _owner._frameIndex++;
+
+                //The continuation completion publishes frameData to the coordinator; the
+                //state records that only the Burst workers, not the renderer, own this map.
+                Volatile.Write(ref _owner._uploadState, UploadComputing);
+                return false;
+            }
+
+            public void Reset() { }
+            public void Dispose() { }
+            public TaskContract Current => TaskContract.Yield.It;
+            object IEnumerator.Current => Current;
+            public override string ToString() => "IndependentThreads.BeginWrite";
+
+            readonly MillionPointsCPU_IndependentThreads _owner;
         }
 
         readonly uint[] _GPUInstancingArgs = {0, 0, 0, 0, 0};
 
-        ComputeBuffer _particleDataBuffer;
+        const int UploadClosed = 0;
+        const int UploadComputing = 1;
+        const int UploadReadyToClose = 2;
+
+        ComputeBuffer[] _uploadBuffers;
+        ComputeBuffer _openBuffer;
+        ComputeBuffer _activeRenderBuffer;
         ComputeBuffer _albedoBuffer;
         ComputeBuffer _GPUInstancingArgsBuffer;
         Mesh _pointMesh;
+        GraphicsFence[] _latestRenderFences;
+        bool[] _hasRenderFence;
 
         NativeDynamicArray _cpuParticles;
-        NativeDynamicArray _gpuPositions;
-        NativeDynamicArray _particleTime;
-        NativeDynamicArray _nativeWriteSlot;
-        NativeArray<float3> _gpuPositionsView;
-        MultiThreadedBurstParallelTaskCollection<PipelinedBurstRangeTask> _particleTasks;
+        NativeDynamicArray _frameData;
+        MultiThreadedBurstParallelTaskCollection<IndependentThreadsBurstRangeTask> _particleTasks;
 
         SteppableRunner _updateRunner;
         MultiThreadRunner _multiThreadRunner;
-        int _publishedGen = -1;
-        int _ackedGen = -1;
+        BeginWriteTask _beginWriteTask;
+        int _frameIndex;
+        int _openSlot;
+        int _activeRenderSlot;
+        int _uploadState;
+        float _requestedTime;
         bool _stopping;
+        bool _hasCompletedRenderBuffer;
 
         bool stopping => Volatile.Read(ref _stopping);
     }

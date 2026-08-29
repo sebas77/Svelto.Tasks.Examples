@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
 using Svelto.DataStructures;
+using Svelto.Tasks.Lean;
 using Svelto.Tasks.Parallelism;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Rendering;
 using Random = UnityEngine.Random;
 
 namespace Svelto.Tasks.Example.MillionPoints.Multithreading
@@ -23,6 +26,7 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
         [SerializeField] Shader _shader;
         [SerializeField] Vector3 _BoundCenter = Vector3.zero;
         [SerializeField] Vector3 _BoundSize = new Vector3(300f, 300f, 300f);
+        [SerializeField, Min(1)] int _elementsPerTask = 8192;
 
         void Awake()
         {
@@ -32,45 +36,122 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
 
         void OnEnable()
         {
+            _stopping = false;
+            _hasCompletedRenderBuffer = false;
             AllocateParticleData();
             InitializeParticleData();
             InitializeRendering();
             InitializeTasks();
+
+            //Slot 0 is reserved as the initial render slot; the first upload uses slot 1.
+            _frameIndex = 1;
+            _updateRunner = new SteppableRunner("MillionPoints.BurstSync.Update");
+            UploadParticles().RunOn(_updateRunner);
+            RenderParticles().RunOn(_updateRunner);
         }
 
         void Update()
         {
-            _particleTime.Set(0, Time.time);
-
-            NativeArray<float3> uploadRegion =
-                _particleDataBuffer.BeginWrite<float3>(0, (int) _particleCount);
-            MillionPointsBurstKernel.UploadRegion.Data = uploadRegion;
-            _particleTasks.Complete();
-            _particleDataBuffer.EndWrite<float3>((int) _particleCount);
-            Graphics.DrawMeshInstancedIndirect(_pointMesh, 0, _material, _bounds, _GPUInstancingArgsBuffer);
+            _updateRunner.Step();
         }
 
+        //Double-buffered ownership for slot = _frameIndex & 1:
+        //
+        //  latestFence[slot].passed --> BeginWrite --> Burst tasks --> EndWrite --> publish slot
+        //             ^                                                               |
+        //             |                                                               v
+        //        CreateGraphicsFence <--------------------------- RenderLoop draws that slot
+        //
+        //Each slot retains only its newest fence. Passing it proves all earlier graphics-queue
+        //draws using that slot have completed, so the CPU may map it again. If the selected
+        //slot is still GPU-owned, this loop yields while RenderParticles keeps drawing the
+        //other completed slot.
+        IEnumerator<TaskContract> UploadParticles()
+        {
+            while (_stopping == false)
+            {
+                int slot = _frameIndex++ & 1;
+                ComputeBuffer buffer = _uploadBuffers[slot];
+
+                while (_hasRenderFence[slot] && _latestRenderFences[slot].passed == false)
+                    yield return TaskContract.Yield.It;
+
+                _hasRenderFence[slot] = false;
+
+                NativeArray<float3> uploadRegion =
+                    buffer.BeginWrite<float3>(0, (int) _particleCount);
+                _openBuffer = buffer;
+                _writeOpen = true;
+
+                _frameData.Set(0, new BurstSyncFrameData(uploadRegion, Time.time));
+
+                yield return _particleTasks.Run().Continue();
+
+                EndWriteIfOpen();
+                _activeBuffer = buffer;
+                _activeRenderSlot = slot;
+                _hasCompletedRenderBuffer = true;
+
+                yield return TaskContract.Yield.It;
+            }
+        }
+
+        IEnumerator<TaskContract> RenderParticles()
+        {
+            while (_stopping == false)
+            {
+                if (_hasCompletedRenderBuffer)
+                {
+                    _material.SetBuffer("_ParticleDataBuffer", _activeBuffer);
+                    Graphics.DrawMeshInstancedIndirect(
+                        _pointMesh, 0, _material, _bounds, _GPUInstancingArgsBuffer);
+
+                    _latestRenderFences[_activeRenderSlot] = Graphics.CreateGraphicsFence(
+                        GraphicsFenceType.CPUSynchronisation,
+                        SynchronisationStageFlags.AllGPUOperations);
+                    _hasRenderFence[_activeRenderSlot] = true;
+                }
+
+                yield return TaskContract.Yield.It;
+            }
+        }
         void OnDisable()
         {
+            _stopping = true;
+
             if (_particleTasks != null)
             {
                 if (_particleTasks.isRunning)
                     _particleTasks.Complete();
 
+                EndWriteIfOpen();
+
+                _updateRunner?.Dispose();
+                _updateRunner = null;
+
                 _particleTasks.Dispose();
                 _particleTasks = null;
             }
 
-            if (_particleTime.isValid)
-                _particleTime.Dispose();
+            if (_frameData.isValid)
+                _frameData.Dispose();
+
+            _latestRenderFences = null;
+            _hasRenderFence = null;
 
             if (_cpuParticles.isValid)
                 _cpuParticles.Dispose();
 
-            if (_particleDataBuffer != null)
+            if (_uploadBuffers != null)
             {
-                _particleDataBuffer.Release();
-                _particleDataBuffer = null;
+                for (int i = 0; i < _uploadBuffers.Length; i++)
+                {
+                    if (_uploadBuffers[i] != null)
+                    {
+                        _uploadBuffers[i].Release();
+                        _uploadBuffers[i] = null;
+                    }
+                }
             }
 
             if (_albedoBuffer != null)
@@ -92,11 +173,23 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
             }
         }
 
+        void EndWriteIfOpen()
+        {
+            if (_writeOpen == false)
+                return;
+
+            _openBuffer.EndWrite<float3>((int) _particleCount);
+            _writeOpen = false;
+            _openBuffer = null;
+            _frameData.Get<BurstSyncFrameData>(0).uploadRegion = default;
+        }
+
         void AllocateParticleData()
         {
             _cpuParticles = NativeDynamicArray.Alloc<BurstCPUParticleData>(
                 Svelto.Common.Allocator.Persistent, _particleCount);
-            _particleTime = NativeDynamicArray.Alloc<float>(Svelto.Common.Allocator.Persistent, 1);
+            _frameData = NativeDynamicArray.Alloc<BurstSyncFrameData>(
+                Svelto.Common.Allocator.Persistent, 1);
         }
 
         void InitializeParticleData()
@@ -112,21 +205,23 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
                     Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f));
             }
 
-            _particleTime.Set(0, 0.0f);
-
             _albedoBuffer = new ComputeBuffer((int) _particleCount, sizeof(float) * 3);
             _albedoBuffer.SetData(albedos);
         }
 
         void InitializeRendering()
         {
-            _particleDataBuffer = new ComputeBuffer((int) _particleCount, sizeof(float) * 3,
-                ComputeBufferType.Structured, ComputeBufferMode.SubUpdates);
+            _uploadBuffers = new ComputeBuffer[2];
+            for (int i = 0; i < _uploadBuffers.Length; i++)
+                _uploadBuffers[i] = new ComputeBuffer((int) _particleCount, sizeof(float) * 3,
+                    ComputeBufferType.Structured, ComputeBufferMode.SubUpdates);
+
+            _latestRenderFences = new GraphicsFence[_uploadBuffers.Length];
+            _hasRenderFence = new bool[_uploadBuffers.Length];
 
             _pointMesh = new Mesh
             {
-                vertices = new[] {new Vector3(0, 0)},
-                normals = new[] {new Vector3(0, 1, 0)}
+                vertices = new[] {new Vector3(0, 0)}
             };
             _pointMesh.SetIndices(new[] {0}, MeshTopology.Points, 0);
 
@@ -137,45 +232,74 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
             _GPUInstancingArgsBuffer.SetData(_GPUInstancingArgs);
 
             _material.shader = _shader;
-            _material.SetBuffer("_ParticleDataBuffer", _particleDataBuffer);
+            _material.SetBuffer("_ParticleDataBuffer", _uploadBuffers[0]);
             _material.SetBuffer("_AlbedoBuffer", _albedoBuffer);
             _bounds = new Bounds(_BoundCenter, _BoundSize);
+            _activeBuffer = _uploadBuffers[0];
+            _activeRenderSlot = 0;
         }
 
         void InitializeTasks()
         {
             uint workerCount = (uint) Math.Max(1, Environment.ProcessorCount - 1);
 
-            MillionPointsBurstKernel.Execute(ref _cpuParticles, ref _particleTime, 0, 0);
+            //forces the Burst compile at init: zero iterations, default output region
+            NativeArray<float3> emptyRegion = default;
+            MillionPointsBurstKernel.Execute(ref _cpuParticles, ref emptyRegion, 0f, 0, 0);
 
             _particleTasks =
                 new MultiThreadedBurstParallelTaskCollection<MillionPointsBurstRangeTask>(
                     "MillionPoints.Burst", workerCount, true);
-            var prototype = new MillionPointsBurstRangeTask(_cpuParticles, _particleTime);
-            _particleTasks.Add(in prototype, (int) _particleCount);
+            //the collection itself splits the range in 8192-particle tasks: idle runners
+            //steal them through the collection's idle callbacks, self-balancing the load
+            _particleTasks.Add(
+                new MillionPointsBurstRangeTask(_cpuParticles, _frameData),
+                (int) _particleCount, _elementsPerTask);
         }
 
         readonly uint[] _GPUInstancingArgs = {0, 0, 0, 0, 0};
 
-        ComputeBuffer _particleDataBuffer;
+        ComputeBuffer[] _uploadBuffers;
+        ComputeBuffer _openBuffer;
+        ComputeBuffer _activeBuffer;
         ComputeBuffer _albedoBuffer;
         ComputeBuffer _GPUInstancingArgsBuffer;
         Mesh _pointMesh;
         Bounds _bounds;
+        GraphicsFence[] _latestRenderFences;
+        bool[] _hasRenderFence;
 
         NativeDynamicArray _cpuParticles;
-        NativeDynamicArray _particleTime;
+        NativeDynamicArray _frameData;
         MultiThreadedBurstParallelTaskCollection<MillionPointsBurstRangeTask> _particleTasks;
+        SteppableRunner _updateRunner;
+        int _frameIndex;
+        int _activeRenderSlot;
+        bool _stopping;
+        bool _writeOpen;
+        bool _hasCompletedRenderBuffer;
+    }
+
+    struct BurstSyncFrameData
+    {
+        public BurstSyncFrameData(NativeArray<float3> uploadRegion, float time)
+        {
+            this.uploadRegion = uploadRegion;
+            this.time = time;
+        }
+
+        public NativeArray<float3> uploadRegion;
+        public float time;
     }
 
     struct MillionPointsBurstRangeTask : IBurstParallelTask
     {
-        public MillionPointsBurstRangeTask(NativeDynamicArray input, NativeDynamicArray time)
+        public MillionPointsBurstRangeTask(NativeDynamicArray input, NativeDynamicArray frameData)
         {
-            _input = input;
-            _time = time;
+            _input      = input;
+            _frameData  = frameData;
             _startIndex = 0;
-            _count = 0;
+            _count      = 0;
         }
 
         public void SetRange(int startIndex, int count)
@@ -186,7 +310,9 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
 
         public bool MoveNext()
         {
-            MillionPointsBurstKernel.Execute(ref _input, ref _time, _startIndex, _count);
+            ref BurstSyncFrameData frameData = ref _frameData.Get<BurstSyncFrameData>(0);
+            MillionPointsBurstKernel.Execute(
+                ref _input, ref frameData.uploadRegion, frameData.time, _startIndex, _count);
             return false;
         }
 
@@ -202,7 +328,7 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
         public object Current => null;
 
         NativeDynamicArray _input;
-        NativeDynamicArray _time;
+        NativeDynamicArray _frameData;
         int _startIndex;
         int _count;
     }
@@ -210,17 +336,10 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
     [BurstCompile]
     static class MillionPointsBurstKernel
     {
-        public static readonly SharedStatic<NativeArray<float3>> UploadRegion =
-            SharedStatic<NativeArray<float3>>.GetOrCreate<BurstUploadRegionKey>();
-
-        struct BurstUploadRegionKey { }
-
         [BurstCompile(CompileSynchronously = true)]
-        public static void Execute(ref NativeDynamicArray input, ref NativeDynamicArray timeArray,
-                                   int startIndex, int count)
+        public static void Execute(ref NativeDynamicArray input, ref NativeArray<float3> output,
+                                   float time, int startIndex, int count)
         {
-            float time = timeArray.Get<float>(0);
-            NativeArray<float3> output = UploadRegion.Data;
             int endIndex = startIndex + count;
 
             for (int index = startIndex; index < endIndex; index++)

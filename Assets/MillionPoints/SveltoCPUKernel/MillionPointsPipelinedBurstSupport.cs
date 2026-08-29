@@ -1,16 +1,18 @@
 using Svelto.DataStructures;
 using Svelto.Tasks.Parallelism;
 using Unity.Burst;
+using Unity.Collections;
 using Unity.Mathematics;
 
 namespace Svelto.Tasks.Example.MillionPoints.Multithreading
 {
-    // Stateless Burst support shared only by AdvancedSync and
-    // IndependentThreads. Each component owns its data, output buffers and
-    // scheduler; this file deliberately owns no MonoBehaviour lifecycle.
-    struct PipelinedBurstParticleData
+    // Stateless direct-write Burst support for IndependentThreads. The main thread
+    // publishes a mapped ComputeBuffer region through IndependentThreadsFrameData;
+    // range tasks then write their disjoint portions of that region directly.
+    // This file deliberately owns no MonoBehaviour lifecycle or synchronization.
+    struct IndependentThreadsBurstParticleData
     {
-        public PipelinedBurstParticleData(float3 basePosition, float rotationSpeed)
+        public IndependentThreadsBurstParticleData(float3 basePosition, float rotationSpeed)
         {
             this.basePosition = basePosition;
             this.rotationSpeed = rotationSpeed;
@@ -20,17 +22,24 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
         public float rotationSpeed;
     }
 
-    struct PipelinedBurstRangeTask : IBurstParallelTask
+    struct IndependentThreadsFrameData
     {
-        public PipelinedBurstRangeTask(NativeDynamicArray input, NativeDynamicArray output,
-                                       NativeDynamicArray time, NativeDynamicArray writeSlot,
-                                       int particlesPerBuffer)
+        public IndependentThreadsFrameData(NativeArray<float3> uploadRegion, float time)
+        {
+            this.uploadRegion = uploadRegion;
+            this.time = time;
+        }
+
+        public NativeArray<float3> uploadRegion;
+        public float time;
+    }
+
+    struct IndependentThreadsBurstRangeTask : IBurstParallelTask
+    {
+        public IndependentThreadsBurstRangeTask(NativeDynamicArray input, NativeDynamicArray frameData)
         {
             _input = input;
-            _output = output;
-            _time = time;
-            _writeSlot = writeSlot;
-            _particlesPerBuffer = particlesPerBuffer;
+            _frameData = frameData;
             _startIndex = 0;
             _count = 0;
         }
@@ -43,9 +52,10 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
 
         public bool MoveNext()
         {
-            MillionPointsPipelinedBurstKernel.Execute(
-                ref _input, ref _output, ref _time, ref _writeSlot, _particlesPerBuffer,
-                _startIndex, _count);
+            ref IndependentThreadsFrameData frameData =
+                ref _frameData.Get<IndependentThreadsFrameData>(0);
+            MillionPointsIndependentThreadsBurstKernel.Execute(
+                ref _input, ref frameData.uploadRegion, frameData.time, _startIndex, _count);
             return false;
         }
 
@@ -61,35 +71,28 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
         public object Current => null;
 
         NativeDynamicArray _input;
-        NativeDynamicArray _output;
-        NativeDynamicArray _time;
-        NativeDynamicArray _writeSlot;
-        int _particlesPerBuffer;
+        NativeDynamicArray _frameData;
         int _startIndex;
         int _count;
     }
 
     [BurstCompile]
-    static class MillionPointsPipelinedBurstKernel
+    static class MillionPointsIndependentThreadsBurstKernel
     {
         [BurstCompile(CompileSynchronously = true)]
-        public static void Execute(ref NativeDynamicArray input, ref NativeDynamicArray output,
-                                   ref NativeDynamicArray timeArray, ref NativeDynamicArray writeSlotArray,
-                                   int particlesPerBuffer, int startIndex, int count)
+        public static void Execute(ref NativeDynamicArray input, ref NativeArray<float3> output,
+                                   float time, int startIndex, int count)
         {
-            float time = timeArray.Get<float>(0);
-            int outputOffset = writeSlotArray.Get<int>(0) * particlesPerBuffer;
             int endIndex = startIndex + count;
 
             for (int index = startIndex; index < endIndex; index++)
             {
-                ref PipelinedBurstParticleData particle =
-                    ref input.Get<PipelinedBurstParticleData>(index);
+                ref IndependentThreadsBurstParticleData particle =
+                    ref input.Get<IndependentThreadsBurstParticleData>(index);
                 float3 randomVector = math.normalize(
                     math.cross(RandomVector((uint) index + 1), particle.basePosition));
 
-                ref float3 position = ref output.Get<float3>(outputOffset + index);
-                position = RotatePosition(
+                output[index] = RotatePosition(
                     particle.basePosition, randomVector, particle.rotationSpeed * time);
             }
         }

@@ -3,6 +3,7 @@ using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Rendering;
 using Random = UnityEngine.Random;
 
 namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
@@ -18,7 +19,13 @@ namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
         [SerializeField] Vector3 _BoundCenter = Vector3.zero;
         [SerializeField] Vector3 _BoundSize = new Vector3(300f, 300f, 300f);
         
-        ComputeBuffer _particleDataBuffer;
+        ComputeBuffer[] _uploadBuffers;
+        ComputeBuffer _activeBuffer;
+        int _frameIndex;
+        int _activeRenderSlot;
+        GraphicsFence[] _latestRenderFences;
+        bool[] _hasRenderFence;
+        bool _hasCompletedRenderBuffer;
         // SoA: static albedo uploaded once at init, never touched again.
         ComputeBuffer _albedoBuffer;
 
@@ -43,8 +50,14 @@ namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
 
             // SoA: positions buffer has a 12 bytes stride (albedo used to be
             // reuploaded with it every frame even if it never changed).
-            _particleDataBuffer = new ComputeBuffer(_particleCount, sizeof(float) * 3,
-                ComputeBufferType.Structured, ComputeBufferMode.SubUpdates);
+            _uploadBuffers = new ComputeBuffer[2];
+            for (int i = 0; i < _uploadBuffers.Length; i++)
+                _uploadBuffers[i] = new ComputeBuffer(_particleCount, sizeof(float) * 3,
+                    ComputeBufferType.Structured, ComputeBufferMode.SubUpdates);
+            _latestRenderFences = new GraphicsFence[_uploadBuffers.Length];
+            _hasRenderFence = new bool[_uploadBuffers.Length];
+            _hasCompletedRenderBuffer = false;
+            _frameIndex = 0;
 
             // set default position. The structs use Unity.Mathematics float3:
             // identical 3-float memory layout to Vector3, so the ComputeBuffer
@@ -72,7 +85,6 @@ namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
             // create point mesh
             _pointMesh = new Mesh();
             _pointMesh.vertices = new[] { new Vector3(0, 0), };
-            _pointMesh.normals = new[] { new Vector3(0, 1, 0), };
             _pointMesh.SetIndices(new[] {0}, MeshTopology.Points, 0);
 
             _GPUInstancingArgsBuffer = new ComputeBuffer(1,
@@ -82,35 +94,69 @@ namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
             _GPUInstancingArgsBuffer.SetData(_GPUInstancingArgs);
 
             _material.shader = _shader;
-            _material.SetBuffer("_ParticleDataBuffer", _particleDataBuffer);
+            _material.SetBuffer("_ParticleDataBuffer", _uploadBuffers[0]);
             _material.SetBuffer("_AlbedoBuffer", _albedoBuffer);
 
             _bounds = new Bounds(_BoundCenter, _BoundSize);
             _job = new ParticlesCPUKernel(_cpuParticleDataArr);
+            _activeBuffer = _uploadBuffers[0];
+            _activeRenderSlot = 0;
         }
 
         void Update()
         {
-            NativeArray<float3> uploadRegion =
-                _particleDataBuffer.BeginWrite<float3>(0, _particleCount);
+            //Two-slot ownership for slot = _frameIndex & 1:
+            //
+            //  latestFence[slot].passed --> BeginWrite --> JobHandle.Complete --> EndWrite
+            //             ^                                                        |
+            //             |                                                        v
+            //        CreateGraphicsFence <----------------------- Draw <--- publish slot
+            //
+            //The latest fence is retained per slot. Passing it proves every earlier draw
+            //using that slot has completed. Update cannot yield, so if the next slot's fence
+            //is pending this frame skips only the upload and continues rendering the most
+            //recent completed slot. No third buffer is allocated.
+            int slot = _frameIndex & 1;
 
-            //Burst cannot read mutable static fields, so the time and mapped
-            //output region are copied into the job before Schedule() snapshots it.
-            _job._time = UnityEngine.Time.time;
-            _job._gpuparticleDataArr = uploadRegion;
+            if (_hasRenderFence[slot] == false || _latestRenderFences[slot].passed)
+            {
+                ComputeBuffer uploadBuffer = _uploadBuffers[slot];
+                _hasRenderFence[slot] = false;
 
-            var jobSchedule = _job.Schedule(_particleCount, 32);
+                NativeArray<float3> uploadRegion =
+                    uploadBuffer.BeginWrite<float3>(0, _particleCount);
 
-            jobSchedule.Complete();
-            _particleDataBuffer.EndWrite<float3>(_particleCount);
+                //Burst cannot read mutable static fields, so the time and mapped
+                //output region are copied into the job before Schedule() snapshots it.
+                _job._time = UnityEngine.Time.time;
+                _job._gpuparticleDataArr = uploadRegion;
+
+                var jobSchedule = _job.Schedule(_particleCount, 32);
+
+                jobSchedule.Complete();
+                uploadBuffer.EndWrite<float3>(_particleCount);
+
+                _activeBuffer = uploadBuffer;
+                _activeRenderSlot = slot;
+                _hasCompletedRenderBuffer = true;
+                _frameIndex++;
+            }
+
+            if (_hasCompletedRenderBuffer == false)
+                return;
 
             //do something seriously slow
 #if DO_SOMETHING_SERIOUSLY_SLOW
             Thread.Sleep(10);
 #endif
 
+            _material.SetBuffer("_ParticleDataBuffer", _activeBuffer);
             Graphics.DrawMeshInstancedIndirect(_pointMesh, 0, _material,
                                                _bounds, _GPUInstancingArgsBuffer);
+            _latestRenderFences[_activeRenderSlot] = Graphics.CreateGraphicsFence(
+                GraphicsFenceType.CPUSynchronisation,
+                SynchronisationStageFlags.AllGPUOperations);
+            _hasRenderFence[_activeRenderSlot] = true;
         }
 
         void OnDisable()
@@ -118,10 +164,19 @@ namespace Svelto.Tasks.Example.MillionPoints.UnityJobs
             if (_cpuParticleDataArr.IsCreated)
                 _cpuParticleDataArr.Dispose();
 
-            if (_particleDataBuffer != null)
+            _latestRenderFences = null;
+            _hasRenderFence = null;
+
+            if (_uploadBuffers != null)
             {
-                _particleDataBuffer.Release();
-                _particleDataBuffer = null;
+                for (int i = 0; i < _uploadBuffers.Length; i++)
+                {
+                    if (_uploadBuffers[i] != null)
+                    {
+                        _uploadBuffers[i].Release();
+                        _uploadBuffers[i] = null;
+                    }
+                }
             }
 
             if (_albedoBuffer != null)

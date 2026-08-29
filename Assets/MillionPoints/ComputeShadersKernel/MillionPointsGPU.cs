@@ -69,10 +69,6 @@ namespace Svelto.Tasks.Example.MillionPoints.ComputeShaders
             {
                 new Vector3(0, 0),
             };
-            _pointMesh.normals = new Vector3[]
-            {
-                new Vector3(0, 1, 0),
-            };
             _pointMesh.SetIndices(new int[]
             {
                 0

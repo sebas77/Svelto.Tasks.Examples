@@ -106,6 +106,13 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
                     Graphics.DrawMeshInstancedIndirect(
                         _pointMesh, 0, _material, _bounds, _GPUInstancingArgsBuffer);
 
+                    //DrawMeshInstancedIndirect only enqueued the draw on the GPU command queue and
+                    //returned immediately: the GPU may still be reading the particle buffer right
+                    //now. CreateGraphicsFence appends a fence command after the draw; with
+                    //CPUSynchronisation + AllGPUOperations it signals (fence.passed becomes true)
+                    //only once ALL GPU work queued so far, including that draw, has completed.
+                    //Until then this slot is GPU-owned: the upload loop polls the fence before
+                    //mapping it for writing again.
                     _latestRenderFences[_activeRenderSlot] = Graphics.CreateGraphicsFence(
                         GraphicsFenceType.CPUSynchronisation,
                         SynchronisationStageFlags.AllGPUOperations);
@@ -257,16 +264,31 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
                 (int) _particleCount, _elementsPerTask);
         }
 
+        //DrawMeshInstancedIndirect reads a fixed 5-uint argument block from the
+        //IndirectArguments buffer: {index count per instance, instance count, start index,
+        //base vertex, start instance}. Only the first two are meaningful here (1 point per
+        //instance, _particleCount instances); the rest stay 0 but must exist because the GPU
+        //always consumes the full 20-byte block.
         readonly uint[] _GPUInstancingArgs = {0, 0, 0, 0, 0};
 
+        //Double-buffered particle positions: the CPU writes one slot through BeginWrite/EndWrite
+        //while the GPU renders the other. Indexed by _frameIndex & 1.
         ComputeBuffer[] _uploadBuffers;
+        //Slot currently mapped for CPU writing (BeginWrite opened, EndWrite still pending)
         ComputeBuffer _openBuffer;
+        //Last fully written slot, currently bound to the material for rendering
         ComputeBuffer _activeBuffer;
+        //Static per-particle colors, uploaded once at startup
         ComputeBuffer _albedoBuffer;
+        //Indirect-arguments buffer for DrawMeshInstancedIndirect (index count, instance count, ...)
         ComputeBuffer _GPUInstancingArgsBuffer;
         Mesh _pointMesh;
         Bounds _bounds;
+        //Latest GraphicsFence issued after drawing each slot; .passed means the GPU has
+        //finished reading that slot and the CPU may map it for writing again
         GraphicsFence[] _latestRenderFences;
+        //True when a fence is pending for that slot (the draw may still be in flight on the GPU);
+        //cleared once the fence passes and the slot is safe to reuse
         bool[] _hasRenderFence;
 
         NativeDynamicArray _cpuParticles;

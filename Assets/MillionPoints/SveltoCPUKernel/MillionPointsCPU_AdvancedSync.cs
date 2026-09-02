@@ -352,15 +352,30 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
             _frameData.Get<AdvancedSyncFrameData>(0).uploadRegion = default;
         }
 
+        //DrawMeshInstancedIndirect reads a fixed 5-uint argument block from the
+        //IndirectArguments buffer: {index count per instance, instance count, start index,
+        //base vertex, start instance}. Only the first two are meaningful here (1 point per
+        //instance, _particleCount instances); the rest stay 0 but must exist because the GPU
+        //always consumes the full 20-byte block.
         readonly uint[] _GPUInstancingArgs = {0, 0, 0, 0, 0};
 
+        //Double-buffered particle positions: the CPU writes one slot through BeginWrite/EndWrite
+        //while the GPU renders the other. Indexed by _frameIndex & 1.
         ComputeBuffer[] _uploadBuffers;
+        //Slot currently mapped for CPU writing (BeginWrite opened, EndWrite still pending)
         ComputeBuffer _openBuffer;
+        //Last fully written slot, currently bound to the material for rendering
         ComputeBuffer _activeRenderBuffer;
+        //Static per-particle colors, uploaded once at startup
         ComputeBuffer _albedoBuffer;
+        //Indirect-arguments buffer for DrawMeshInstancedIndirect (index count, instance count, ...)
         ComputeBuffer _GPUInstancingArgsBuffer;
         Mesh _pointMesh;
+        //Latest GraphicsFence issued after drawing each slot; .passed means the GPU has
+        //finished reading that slot and the CPU may map it for writing again
         GraphicsFence[] _latestRenderFences;
+        //True when a fence is pending for that slot (the draw may still be in flight on the GPU);
+        //cleared once the fence passes and the slot is safe to reuse
         bool[] _hasRenderFence;
 
         NativeDynamicArray _cpuParticles;

@@ -1,9 +1,7 @@
 # Svelto.Tasks.Examples
 
-Unity project containing the examples for [Svelto.Tasks](https://github.com/sebas77/Svelto.Tasks)
-(work in progress for Svelto.Tasks 2.0). The Svelto.Tasks and Svelto.Common packages are
-embedded in `Packages/` so the examples always run against the package source in this
-repository.
+Unity project containing the examples for [Svelto.Tasks](https://github.com/sebas77/Svelto.Tasks).
+The Svelto.Tasks and Svelto.Common packages are embedded in `Packages/` so the examples always run against the package source in this repository.
 
 ## Requirements
 
@@ -37,8 +35,7 @@ part of the test.
 
 ![MillionPoints running](Captures/Screenshot.png)
 
-The in-scene profiler HUD (top-left) samples frame time and GC collections;
-with the `BENCHMARK` scripting define it also reports the particle count.
+The in-scene profiler HUD (top-left) samples frame time and GC collections.
 
 ### CPU upload fence ownership
 
@@ -69,9 +66,11 @@ Deep profiles of the five implementations (`Captures/`):
 
 ## Profiling Svelto.Tasks
 
-Svelto.Tasks integrates with the Unity Profiler through a dedicated
-**Svelto.Tasks** module showing *Task Time* and *Task Steps* graphs plus a
-per-runner breakdown (total/self time, calls and GC allocations):
+The project defines `PROFILE_SVELTO` and `TASKS_PROFILER_ENABLED` (Standalone
+scripting defines), which enable the Svelto.Tasks profiler integration: a
+dedicated **Svelto.Tasks** Unity Profiler module showing *Task Time* and
+*Task Steps* charts plus a per-runner call tree (total/self time, calls and GC
+allocations):
 
 ![Svelto.Tasks profiler module](Captures/sveltoprofiler.png)
 

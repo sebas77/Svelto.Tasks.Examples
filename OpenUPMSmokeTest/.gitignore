@@ -1,0 +1,9 @@
+[Ll]ibrary/
+[Ll]ogs/
+[Oo]bj/
+[Tt]emp/
+[Uu]serSettings/
+.idea/
+.vs/
+*.csproj
+*.sln

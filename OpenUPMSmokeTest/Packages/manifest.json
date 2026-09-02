@@ -1,0 +1,21 @@
+{
+  "dependencies": {
+    "com.sebaslab.svelto.common": "3.7.2",
+    "com.sebaslab.svelto.tasks": "2.0.0-preview.4",
+    "com.unity.burst": "1.8.30"
+  },
+  "scopedRegistries": [
+    {
+      "name": "OpenUPM",
+      "url": "https://package.openupm.com",
+      "scopes": [
+        "com.sebaslab.svelto.common",
+        "com.sebaslab.svelto.tasks",
+        "org.nuget.system.buffers",
+        "org.nuget.system.memory",
+        "org.nuget.system.numerics.vectors",
+        "org.nuget.system.runtime.compilerservices.unsafe"
+      ]
+    }
+  ]
+}

@@ -1,7 +1,10 @@
-﻿namespace Svelto.Common.Tests
+﻿using System;
+using System.Runtime.CompilerServices;
+
+namespace Svelto.Common.Tests
 {
     [TestFixture]
-    public class MemoryUtilitiesAlignmentTests
+    public partial class MemoryUtilitiesTests
     {
         [TestCase(0u, 0u)]
         [TestCase(1u, 4u)]
@@ -58,6 +61,26 @@
 
                 Assert.That((aligned & 3u) == 0u, Is.True);
                 Assert.That(aligned >= inputs[i], Is.True);
+            }
+        }
+
+        [Test]
+        public unsafe void NativeRealloc_PreservesExistingBytes()
+        {
+            var pointer = MemoryUtilities.NativeAlloc(16, Allocator.Persistent);
+            try
+            {
+                Unsafe.Write((void*)pointer, 123456789);
+                Unsafe.Write((void*)(pointer + sizeof(int)), (short)-10);
+
+                pointer = MemoryUtilities.NativeRealloc(pointer, 16, Allocator.Persistent, 32);
+
+                Assert.That(Unsafe.Read<int>((void*)pointer), Is.EqualTo(123456789));
+                Assert.That(Unsafe.Read<short>((void*)(pointer + sizeof(int))), Is.EqualTo(-10));
+            }
+            finally
+            {
+                MemoryUtilities.NativeFree(pointer, Allocator.Persistent);
             }
         }
     }

@@ -3,7 +3,7 @@
 namespace Svelto.Common.Tests
 {
     [TestFixture]
-    public class SveltoDictionaryRecycleOrAddTests
+    public partial class SveltoDictionaryTests
     {
         abstract class BaseValue
         {

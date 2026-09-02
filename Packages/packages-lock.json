@@ -20,7 +20,9 @@
       "version": "file:com.sebaslab.svelto.common",
       "depth": 0,
       "source": "embedded",
-      "dependencies": {}
+      "dependencies": {
+        "org.nuget.system.runtime.compilerservices.unsafe": "6.0.0"
+      }
     },
     "com.sebaslab.svelto.tasks": {
       "version": "file:com.sebaslab.svelto.tasks",

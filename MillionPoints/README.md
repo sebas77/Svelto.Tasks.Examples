@@ -33,7 +33,7 @@ Switch implementations with the on-screen buttons or the `[` and `]` keys.
 Switching disables the previous component first, so its `OnDisable` cleanup is
 part of the test.
 
-![MillionPoints running](Captures/Screenshot.png)
+![MillionPoints running](../Captures/Screenshot.png)
 
 The in-scene profiler HUD (top-left) samples frame time and GC collections.
 
@@ -58,11 +58,11 @@ Deep profiles of the five implementations (`Captures/`):
 
 | Implementation | Capture |
 | --- | --- |
-| `MillionPointsCPU_BurstSync` | ![BurstSync profiler capture](Captures/CPUSveltoBurstSync.png) |
-| `MillionPointsCPUUnityJobs` | ![Unity Jobs profiler capture](Captures/CPUJOBS.png) |
-| `MillionPointsCPU_AdvancedSync` | ![AdvancedSync profiler capture](Captures/CPUSveltoAdvanced.png) |
-| `MillionPointsCPU_IndependentThreads` | ![IndependentThreads profiler capture](Captures/CPUSveltoInd.png) |
-| `MillionPointsGPU` | ![GPU compute shader profiler capture](Captures/GPUCS.png) |
+| `MillionPointsCPU_BurstSync` | ![BurstSync profiler capture](../Captures/CPUSveltoBurstSync.png) |
+| `MillionPointsCPUUnityJobs` | ![Unity Jobs profiler capture](../Captures/CPUJOBS.png) |
+| `MillionPointsCPU_AdvancedSync` | ![AdvancedSync profiler capture](../Captures/CPUSveltoAdvanced.png) |
+| `MillionPointsCPU_IndependentThreads` | ![IndependentThreads profiler capture](../Captures/CPUSveltoInd.png) |
+| `MillionPointsGPU` | ![GPU compute shader profiler capture](../Captures/GPUCS.png) |
 
 ## Profiling Svelto.Tasks
 
@@ -72,7 +72,7 @@ dedicated **Svelto.Tasks** Unity Profiler module showing *Task Time* and
 *Task Steps* charts plus a per-runner call tree (total/self time, calls and GC
 allocations):
 
-![Svelto.Tasks profiler module](Captures/sveltoprofiler.png)
+![Svelto.Tasks profiler module](../Captures/sveltoprofiler.png)
 
 ## Verifying the examples
 

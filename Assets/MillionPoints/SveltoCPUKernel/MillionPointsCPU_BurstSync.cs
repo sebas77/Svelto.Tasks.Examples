@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Svelto.DataStructures;
 using Svelto.Tasks.Lean;
 using Svelto.Tasks.Parallelism;
+using Svelto.Tasks.Parallelism.ExtraLean;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Mathematics;

@@ -43,7 +43,7 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
             Volatile.Write(ref _stopping, false);
             Volatile.Write(ref _uploadState, UploadClosed);
             _frameIndex = 0;
-            _hasCompletedRenderBuffer = false;
+            _hasRenderableBuffer = false;
             _updateRunner = new SteppableRunner("MillionPoints.IndependentThreads.Update");
             _multiThreadRunner = new MultiThreadRunner("MillionPoints.IndependentThreads.Coordinator");
 
@@ -251,7 +251,7 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
                 if (Volatile.Read(ref _uploadState) == UploadReadyToClose)
                     PublishCompletedWrite();
 
-                if (_hasCompletedRenderBuffer)
+                if (_hasRenderableBuffer) //ready to render a new buffer
                 {
                     _material.SetBuffer("_ParticleDataBuffer", _activeRenderBuffer);
                     Graphics.DrawMeshInstancedIndirect(
@@ -285,7 +285,7 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
 
             _activeRenderBuffer = completedBuffer;
             _activeRenderSlot = completedSlot;
-            _hasCompletedRenderBuffer = true;
+            _hasRenderableBuffer = true;
 
             //Release the mapping before advertising Closed: BeginWriteTask may be queued on
             //this same runner and can open the other slot as soon as it observes this state.
@@ -394,7 +394,7 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
         int _uploadState;
         float _requestedTime;
         bool _stopping;
-        bool _hasCompletedRenderBuffer;
+        bool _hasRenderableBuffer;
 
         bool stopping => Volatile.Read(ref _stopping);
     }

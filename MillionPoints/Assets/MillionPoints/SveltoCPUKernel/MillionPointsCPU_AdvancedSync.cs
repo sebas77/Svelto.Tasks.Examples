@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using Svelto.DataStructures;
-using Svelto.Tasks;
 using Svelto.Tasks.Enumerators;
 using Svelto.Tasks.Lean;
-using Svelto.Tasks.Parallelism;
 using Svelto.Tasks.Parallelism.ExtraLean;
 using Unity.Burst;
 using Unity.Collections;
@@ -56,7 +54,6 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
         {
             Volatile.Write(ref _stopping, false);
             //Slot 0 is the initial render buffer, so the first upload must target slot 1.
-            _frameIndex = 1;
             _updateRunner = new SteppableRunner("MillionPoints.AdvancedSync.Update");
             _multiThreadRunner = new MultiThreadRunner("MillionPoints.AdvancedSync.Coordinator");
 
@@ -213,7 +210,7 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
 
         //Complete two-slot ownership graph:
         //
-        //  _frameIndex & 1 selects the next upload slot. With slot 0 initially rendered,
+        //  The UploadLoop-local slot toggles with ^= 1. With slot 0 initially rendered,
         //  uploads alternate 1, 0, 1, 0... and never map the currently active render slot.
         //
         //       SLOT 0                                      SLOT 1
@@ -222,7 +219,7 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
         //  | hasFence[0]      |                        | hasFence[1]      |
         //  +--------+---------+                        +--------+---------+
         //           |                                           |
-        //           | selected by (_frameIndex & 1)             |
+        //           | selected by the local slot toggle          |
         //           +--------------------+----------------------+
         //                                |
         //                    latestFence[slot].passed?
@@ -249,17 +246,20 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
         //waits and the renderer continues with the other slot.
         IEnumerator<TaskContract> UploadLoop()
         {
+            int slot = 0;
             while (stopping == false)
             {
-                int slot = _frameIndex++ & 1;
+                slot ^= 1; //double buffering slot, it swaps only once the previous slot is sent to the gpu
                 ComputeBuffer buffer = _uploadBuffers[slot];
 
+                //check if the current slot is still in use by the GPU. If so, wait for the fence to pass before mapping it.
                 while (_hasRenderFence[slot] && _latestRenderFences[slot].passed == false)
                     yield return TaskContract.Yield.It;
 
                 //The passed fence transfers this slot from GPU ownership back to the CPU.
                 _hasRenderFence[slot] = false;
 
+                //Map the slot for writing and hand the mapped region to the Burst workers. 
                 NativeArray<float3> uploadRegion =
                     buffer.BeginWrite<float3>(0, (int) _particleCount);
                 _openBuffer = buffer;
@@ -272,11 +272,13 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
                 //wait for the workers to finish filling the mapped region
                 yield return _computeDone.Wait().Continue();
 
+                //Close the write and release the slot back to the GPU. The fence will be created in RenderLoop after the draw.
                 buffer.EndWrite<float3>((int) _particleCount);
                 _writeOpen = false;
 
                 //Publish the completed slot; its next reuse will pass through the fence gate.
                 _activeRenderBuffer = buffer;
+                //swap the active render slot so RenderLoop draws the newly uploaded buffer next frame
                 _activeRenderSlot = slot;
             }
         }
@@ -361,7 +363,7 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
         readonly uint[] _GPUInstancingArgs = {0, 0, 0, 0, 0};
 
         //Double-buffered particle positions: the CPU writes one slot through BeginWrite/EndWrite
-        //while the GPU renders the other. Indexed by _frameIndex & 1.
+        //while the GPU renders the other. UploadLoop alternates slots with its local toggle.
         ComputeBuffer[] _uploadBuffers;
         //Slot currently mapped for CPU writing (BeginWrite opened, EndWrite still pending)
         ComputeBuffer _openBuffer;
@@ -387,7 +389,7 @@ namespace Svelto.Tasks.Example.MillionPoints.Multithreading
         MultiThreadRunner _multiThreadRunner;
         RegionMappedSignal _regionMapped;
         ComputeDoneSignal _computeDone;
-        int _frameIndex;
+        
         int _activeRenderSlot;
         bool _stopping;
         bool _writeOpen;

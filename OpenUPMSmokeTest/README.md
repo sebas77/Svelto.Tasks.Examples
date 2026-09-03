@@ -6,11 +6,8 @@ neighbouring `MillionPoints` project.
 
 ## Pinned package versions
 
-- `com.sebaslab.svelto.tasks` `2.0.0-preview.2`
-- `com.sebaslab.svelto.common` `3.7.1`
-
-Svelto.Tasks `2.0.0-preview.2` declares Svelto.Common `3.7.1` as its
-dependency.
+- `com.sebaslab.svelto.tasks`
+- `com.sebaslab.svelto.common`
 
 ## Verification
 

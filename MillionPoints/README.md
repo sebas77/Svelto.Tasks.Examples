@@ -7,8 +7,8 @@ The Svelto.Tasks and Svelto.Common packages are embedded in `Packages/` so the e
 
 - Unity **6000.5** or newer (project built with 6000.5.9f1) with the **Universal Render Pipeline**
 - Packages (already referenced by `Packages/manifest.json`):
-  - `com.sebaslab.svelto.tasks` 2.0.0-preview.2 (embedded)
-  - `com.sebaslab.svelto.common` 3.6.0 (embedded)
+  - `com.sebaslab.svelto.tasks` 
+  - `com.sebaslab.svelto.common` 
   - `com.unity.burst`, `com.unity.collections`, `com.unity.render-pipelines.universal`
 
 ## Running the examples
